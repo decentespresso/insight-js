@@ -1,5 +1,21 @@
 /* Insight skin — faithful classic look (light theme). Refined against the
    Tcl golden reference over the coming milestones. Native canvas 1280x800. */
+
+/* The exact font files the de1app Insight skin renders with (Noto Sans UI):
+   dui.tcl maps helvetica_font -> notosansuiregular.ttf, bold -> notosansuibold.ttf. */
+@font-face {
+  font-family: 'InsightUI';
+  font-style: normal;
+  font-weight: 400;
+  src: url('../../assets/fonts/notosansuiregular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'InsightUI';
+  font-style: normal;
+  font-weight: 700;
+  src: url('../../assets/fonts/notosansuibold.ttf') format('truetype');
+}
+
 :root {
   --ins-green: #7ea63a;        /* Insight start-button / accent green */
   --ins-green-dark: #5f8a2a;
@@ -14,8 +30,12 @@
   --ins-tab-active: #ffffff;
 }
 * { box-sizing: border-box; }
+/* Grayscale AA (not macOS subpixel) so text weight matches the Tk/Tcl rendering
+   instead of looking heavier/bolder than the original Insight skin. */
 html, body { margin: 0; background: #000; color: var(--ins-ink); overflow: hidden;
-  font-family: "Helvetica Neue", Arial, system-ui, sans-serif; }
+  font-family: "Helvetica Neue", Arial, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+.ovar, svg text { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
 /* Faithful page host: #stage is the on-screen 1280x800 viewport; #page is the
    native 2560x1600 Insight canvas, CSS-scaled to fit. All overlays authored in

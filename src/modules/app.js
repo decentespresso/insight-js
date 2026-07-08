@@ -10,20 +10,89 @@ import { openProfileSelector } from '../views/profile_selector.js';
 import { openDYE } from '../views/dye.js';
 import { openSettings } from '../views/settings.js';
 import { openProfileEditor } from '../views/profile_editor.js';
+import { openNumpad } from '../views/numpad.js';
 
 setDebug(true);
 
 const stage = document.getElementById('stage');
-const live = { pageState: 'off', substate: '', pressure: 0, flow: 0, mixTemp: 0, groupTemp: 0,
-  steamTemp: 0, targetTemp: 0, weight: 0, elapsed: 0, pourVolume: 0, profileTitle: '',
-  targetWeight: 0, currentStep: '', steamDuration: 30, waterVolume: 50, waterTemp: 90, flushSeconds: 10 };
+const live = { pageState: 'off', family: 'espresso', substate: '', pressure: 0, flow: 0, mixTemp: 0, groupTemp: 0,
+  steamTemp: 0, targetTemp: 0, coffeeTemp: 0, metalTemp: 0, weight: 0, elapsed: 0, pourVolume: 0,
+  preinfElapsed: 0, pourElapsed: 0, doneElapsed: 0, preinfVolume: 0, pourVolumeOnly: 0, totalVolume: 0,
+  profileTitle: '', profileType: 'Profile', targetVolume: 0, targetWeight: 0, currentStep: '',
+  steamDuration: 30, waterVolume: 50, waterTemp: 90, flushSeconds: 10,
+  waterFlowMax: 10, flushFlowMax: 6, steamTarget: 150, steamFlowMax: 2.5, steamPreheat: 160,
+  steamEnabled: true, resistanceOn: false };
 
 // shared shot data buffer (all charts render from it)
-const buf = { t: [], p: [], pg: [], f: [], fg: [], w: [], T: [], Tg: [] };
+const buf = { t: [], p: [], pg: [], f: [], fg: [], w: [], T: [], Tg: [], r: [] };
 const resetBuf = () => { for (const k in buf) buf[k] = []; };
 
+// profile preview curve (target pressure/flow/temp step lines from profile steps)
+let preview = { t: [], p: [], f: [], T: [] };
+// pour-phase tracking (preinfusion vs pouring split, like Insight)
+let poured = false, preinfEnd = 0, lastVolT = null, doneStart = null, doneTimer = null;
+
+// Determine profile type text (Insight: Pressure / Flow / Advanced profile).
+function profileTypeText(steps) {
+  if (!Array.isArray(steps) || !steps.length) return 'Profile';
+  const pumps = new Set(steps.map((s) => s.pump));
+  const hasExit = steps.some((s) => s.exit) || steps.some((s) => s.limiter);
+  if (pumps.size > 1 || hasExit) return 'Advanced profile';
+  if (pumps.has('flow')) return 'Flow profile';
+  return 'Pressure profile';
+}
+
+// Build the target-curve preview: pressure line where pressure-controlled, flow
+// line where flow-controlled (nulls break the line), temperature throughout.
+function buildPreview(steps) {
+  const out = { t: [], p: [], f: [], T: [] };
+  if (!Array.isArray(steps)) return out;
+  // drawable frames (dur>0); zero-duration frames just seed the setpoint
+  const draw = []; let sp = null, sf = null;
+  for (const s of steps) {
+    const dur = Math.max(0, +s.seconds || 0);
+    if (dur === 0) { if (s.pump === 'pressure') sp = +s.pressure; else sf = +s.flow; continue; }
+    draw.push({ s, dur });
+  }
+  let clock = 0, prevP = sp, prevF = sf;
+  for (let i = 0; i < draw.length; i++) {
+    const { s, dur } = draw[i], next = draw[i + 1];
+    const smooth = s.transition === 'smooth', temp = +s.temperature;
+    if (s.pump === 'pressure') {
+      const v = +s.pressure, from = smooth && prevP != null ? prevP : v;
+      out.t.push(clock, clock + dur); out.p.push(from, v); out.f.push(null, null); out.T.push(temp, temp);
+      prevP = v;
+      // Insight drops the pressure line to 0 where pressure control hands off to flow
+      if (next && next.s.pump !== 'pressure') { out.t.push(clock + dur); out.p.push(0); out.f.push(null); out.T.push(temp); }
+    } else {
+      const v = +s.flow, from = smooth && prevF != null ? prevF : v;
+      out.t.push(clock, clock + dur); out.f.push(from, v); out.p.push(null, null); out.T.push(temp, temp);
+      prevF = v;
+      if (next && next.s.pump !== 'flow') { out.t.push(clock + dur); out.f.push(0); out.p.push(null); out.T.push(temp); }
+    }
+    clock += dur;
+  }
+  return out;
+}
+
+// Is the current page a "ready" preview page (show profile preview, not a shot)?
+const isPreviewPage = (p) => currentFamily === 'espresso' && baseOf(p) === families.espresso.base;
+
+// Steam-heater enable: de1app disables the heater by sending steam target temp 0
+// (firmware treats <135 as off). reaprime has no disable flag but accepts
+// targetTemperature 0, so we do the same and remember the desired temp locally
+// (sending 0 would otherwise lose it — the Tcl keeps it as a separate setting).
+const STEAM_DESIRED_KEY = 'insight_steam_desired_temp';
+const steamDesiredTemp = () => { const v = parseFloat(localStorage.getItem(STEAM_DESIRED_KEY)); return v >= 135 ? v : 150; };
+
 let currentFamily = 'espresso', machineState = 'idle';
-let shotStart = null, lastT = null, curWeight = 0, saveT = null, activeChart = null;
+let shotStart = null, curWeight = 0, saveT = null, activeChart = null;
+// temperature-zoom Y-scale levels (tap top half to zoom in, bottom to zoom out)
+const TEMP_RANGES = [[78, 92], [84, 92], [87, 91]];
+let tempLevel = 0;
+function applyTempRange() {
+  if (activeChart && activeChart.setTempRange) activeChart.setTempRange(TEMP_RANGES[tempLevel]);
+}
 
 const PAGE_GRAPH = { off: 'espresso_chart', espresso: 'espresso_chart', espresso_3: 'espresso_chart',
   off_zoomed: 'zoom_pf', espresso_zoomed: 'zoom_pf', espresso_3_zoomed: 'zoom_pf',
@@ -33,9 +102,13 @@ const baseOf = (p) => p.replace(/_zoomed(_temperature)?$/, '');
 function showPage(p) {
   live.pageState = p; host.show(p); host.update(live);
   activeChart = host.graphs[PAGE_GRAPH[p]] || null;
-  if (activeChart) { activeChart.resize(); activeChart.render(buf); }
+  if (activeChart) {
+    activeChart.resize();
+    if (isPreviewPage(p) && activeChart.renderPreview) activeChart.renderPreview(preview);
+    else activeChart.render(buf);
+  }
 }
-function setFamily(fam) { currentFamily = fam; showPage(families[fam].base); }
+function setFamily(fam) { currentFamily = fam; live.family = fam; showPage(families[fam].base); }
 
 const actions = {
   navFlush: () => setFamily('flush'), navEspresso: () => setFamily('espresso'),
@@ -53,12 +126,37 @@ const actions = {
   describe: () => openDYE(),
   profileSelect: () => openProfileSelector((p) => { live.profileTitle = p.title; loadWorkflow(); host.update(live); }),
   zoomPF: () => showPage(baseOf(live.pageState) + '_zoomed'),
-  zoomTemp: () => showPage(baseOf(live.pageState) + '_zoomed_temperature'),
+  zoomTemp: () => { tempLevel = 0; showPage(baseOf(live.pageState) + '_zoomed_temperature'); },
   unzoom: () => showPage(baseOf(live.pageState)),
+  toggleSteam: () => {
+    live.steamEnabled = !live.steamEnabled;
+    if (live.steamEnabled) live.steamTarget = steamDesiredTemp();          // restore desired
+    else if (live.steamTarget >= 135) localStorage.setItem(STEAM_DESIRED_KEY, String(live.steamTarget));
+    host.update(live);
+    // same method as Tcl: disable heater by sending steam target temperature 0
+    api.updateWorkflow({ steamSettings: { targetTemperature: live.steamEnabled ? live.steamTarget : 0 } })
+      .catch((e) => logger.warn('steam toggle', e));
+  },
+  toggleResistance: () => {
+    live.resistanceOn = !live.resistanceOn; host.update(live);
+    if (activeChart && activeChart.setResistance) activeChart.setResistance(live.resistanceOn, buf);
+  },
+  tempZoomIn: () => { tempLevel = Math.min(TEMP_RANGES.length - 1, tempLevel + 1); applyTempRange(); },
+  tempZoomOut: () => { if (tempLevel === 0) return actions.unzoom(); tempLevel -= 1; applyTempRange(); },
   adjust: (el) => {
     const a = el.adj; let v = (live[a.key] ?? a.min) + a.delta;
     v = Math.min(a.max, Math.max(a.min, v)); live[a.key] = v; host.update(live);
     clearTimeout(saveT); saveT = setTimeout(() => api.updateWorkflow(a.set(v)).catch((e) => logger.warn('save', e)), 300);
+  },
+  slideFlow: (el, hostRef, value) => {
+    const a = el.adj; live[a.key] = value; host.update(live);
+    clearTimeout(saveT); saveT = setTimeout(() => api.updateWorkflow(a.set(value)).catch((e) => logger.warn('slide', e)), 200);
+  },
+  numpad: (el) => {
+    const n = el.np;
+    openNumpad({ title: n.title, value: live[n.key] ?? n.min, min: n.min, max: n.max,
+      step: n.step || 1, bigStep: n.bigStep || 10, decimals: n.decimals || 0,
+      onOk: (v) => { live[n.key] = v; host.update(live); api.updateWorkflow(n.set(v)).catch((e) => logger.warn('numpad save', e)); } });
   },
 };
 
@@ -70,14 +168,28 @@ host.registerGraph('zoom_temp', (n) => new ZoomChart(n, 'temp'));
 async function loadWorkflow() {
   try {
     const wf = await api.getWorkflow();
+    const steps = wf?.profile?.steps || [];
     live.profileTitle = wf?.profile?.title || '';
-    live.targetTemp = wf?.profile?.steps?.[0]?.temperature || live.targetTemp;
+    live.profileType = profileTypeText(steps);
+    live.targetTemp = steps?.[0]?.temperature || live.targetTemp;
     live.targetWeight = wf?.context?.targetYield || wf?.profile?.target_weight || 0;
+    live.targetVolume = wf?.profile?.target_volume || wf?.context?.targetYield || 0;
+    preview = buildPreview(steps);
     if (wf?.steamSettings?.duration != null) live.steamDuration = wf.steamSettings.duration;
+    if (wf?.steamSettings?.targetTemperature != null) {
+      const t = wf.steamSettings.targetTemperature;
+      live.steamEnabled = t >= 135;                 // <135 => heater off (firmware convention)
+      if (t >= 135) { live.steamTarget = t; localStorage.setItem(STEAM_DESIRED_KEY, String(t)); }
+      else live.steamTarget = steamDesiredTemp();   // heater off: show remembered desired temp
+    }
+    if (wf?.steamSettings?.flow != null) live.steamFlowMax = wf.steamSettings.flow;
     if (wf?.hotWaterData?.volume != null) live.waterVolume = wf.hotWaterData.volume;
     if (wf?.hotWaterData?.targetTemperature != null) live.waterTemp = wf.hotWaterData.targetTemperature;
+    if (wf?.hotWaterData?.flow != null) live.waterFlowMax = wf.hotWaterData.flow;
     if (wf?.rinseData?.duration != null) live.flushSeconds = wf.rinseData.duration;
+    if (wf?.rinseData?.flow != null) live.flushFlowMax = wf.rinseData.flow;
     host.update(live);
+    if (activeChart && isPreviewPage(live.pageState) && activeChart.renderPreview) activeChart.renderPreview(preview);
   } catch (e) { logger.warn('workflow', e); }
 }
 
@@ -86,7 +198,7 @@ function onSnapshot(d) {
   live.substate = (d.state && d.state.substate) || '';
   live.pressure = d.pressure; live.flow = d.flow; live.mixTemp = d.mixTemperature;
   live.groupTemp = d.groupTemperature; live.steamTemp = d.steamTemperature;
-  if (baseOf(live.pageState) === 'espresso') live.targetTemp = d.mixTemperature;
+  live.coffeeTemp = d.mixTemperature; live.metalTemp = d.groupTemperature;
   live.currentStep = d.currentFrameDescription || d.stepName || live.currentStep;
 
   if (st !== machineState) { onStateChange(machineState, st); machineState = st; }
@@ -94,24 +206,52 @@ function onSnapshot(d) {
   if (st === 'espresso') {
     const now = performance.now();
     live.elapsed = shotStart ? (now - shotStart) / 1000 : 0;
-    if (lastT != null) live.pourVolume += (d.flow || 0) * ((now - lastT) / 1000);
-    lastT = now;
+    const dv = lastVolT != null ? (d.flow || 0) * ((now - lastVolT) / 1000) : 0;
+    lastVolT = now;
+    live.totalVolume += dv;
+    // preinfusion until the shot builds pressure (exit condition), then pouring
+    if (!poured) {
+      live.preinfVolume += dv; live.preinfElapsed = live.elapsed;
+      if (d.pressure >= 4) { poured = true; preinfEnd = live.elapsed; }
+    } else {
+      live.pourVolumeOnly += dv; live.pourElapsed = live.elapsed - preinfEnd;
+    }
     buf.t.push(live.elapsed); buf.p.push(d.pressure); buf.pg.push(d.targetPressure);
     buf.f.push(d.flow); buf.fg.push(d.targetFlow); buf.w.push(curWeight);
     buf.T.push(d.mixTemperature); buf.Tg.push(d.targetMixTemperature);
+    // puck resistance = pressure / flow^2 (laminar), like Insight's resistance curve
+    buf.r.push(d.flow > 0.2 ? +(d.pressure / (d.flow * d.flow)).toFixed(2) : null);
     if (activeChart) activeChart.render(buf);
   }
   host.update(live);
+}
+
+function resetShotStats() {
+  poured = false; preinfEnd = 0; lastVolT = null;
+  Object.assign(live, { elapsed: 0, preinfElapsed: 0, pourElapsed: 0, doneElapsed: 0,
+    preinfVolume: 0, pourVolumeOnly: 0, totalVolume: 0 });
+  clearInterval(doneTimer); doneTimer = null; doneStart = null;
+}
+
+// After a shot ends, Insight counts "Ns done" on the ready page for a while.
+function startDoneTimer() {
+  clearInterval(doneTimer); doneStart = performance.now();
+  doneTimer = setInterval(() => {
+    live.doneElapsed = (performance.now() - doneStart) / 1000;
+    if (live.doneElapsed > 120) { clearInterval(doneTimer); doneTimer = null; }
+    host.update(live);
+  }, 1000);
 }
 
 function onStateChange(prev, next) {
   logger.info(`machine ${prev} -> ${next}`);
   const runFam = stateToFamily[next], prevFam = stateToFamily[prev];
   if (runFam) {
-    currentFamily = runFam;
-    if (next === 'espresso') { shotStart = performance.now(); lastT = null; live.pourVolume = 0; live.elapsed = 0; resetBuf(); }
+    currentFamily = runFam; live.family = runFam;
+    if (next === 'espresso') { shotStart = performance.now(); resetShotStats(); resetBuf(); }
     showPage(families[runFam].run);
   } else if (prevFam && (next === 'idle' || next === 'ready')) {
+    if (prevFam === 'espresso') startDoneTimer();
     showPage(families[prevFam].done);
   } else if (next === 'idle') {
     showPage(families[currentFamily].base);

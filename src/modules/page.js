@@ -54,10 +54,43 @@ export class PageHost {
         Object.assign(node.style, {
           left: el.x + 'px', top: el.y + 'px', transform: `translate(${ax},${ay})`,
           font: el.font || '', color: el.fill || '#000', textAlign: el.justify || 'left',
-          fontSize: (el.size ? el.size + 'px' : ''), fontFamily: el.family || 'Helvetica, Arial, sans-serif',
+          fontSize: (el.size ? el.size + 'px' : ''), fontFamily: el.family || "'InsightUI', Helvetica, Arial, sans-serif",
           fontWeight: el.weight || 'normal', width: el.width ? el.width + 'px' : '',
+          letterSpacing: el.spacing ? el.spacing + 'px' : '',
         });
         if (el.text != null) node.textContent = el.text;
+      } else if (el.kind === 'box') {
+        // simple styled rectangle (e.g. the steam "Enabled" toggle pill/knob)
+        node = document.createElement('div');
+        node.className = 'obox';
+        const [x1, y1, x2, y2] = el.rect;
+        Object.assign(node.style, { position: 'absolute', left: x1 + 'px', top: y1 + 'px',
+          width: (x2 - x1) + 'px', height: (y2 - y1) + 'px', background: el.bg || 'transparent',
+          borderRadius: (el.radius || 0) + 'px', border: el.border || 'none', pointerEvents: 'none' });
+      } else if (el.kind === 'slider') {
+        // horizontal drag slider (Insight's bottom flow-rate control)
+        node = document.createElement('div');
+        node.className = 'oslider';
+        const [x1, y1, x2, y2] = el.rect;
+        Object.assign(node.style, { position: 'absolute', left: x1 + 'px', top: y1 + 'px',
+          width: (x2 - x1) + 'px', height: (y2 - y1) + 'px', background: el.trough || '#cfd4e6',
+          borderRadius: (el.radius || 24) + 'px', cursor: 'pointer', touchAction: 'none', overflow: 'hidden' });
+        const hw = el.handleW || 500;
+        const handle = document.createElement('div');
+        Object.assign(handle.style, { position: 'absolute', top: '0', left: '0', height: '100%',
+          width: hw + 'px', background: el.fill || '#ffffff', borderRadius: (el.radius || 24) + 'px',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.18)', pointerEvents: 'none' });
+        node.appendChild(handle);
+        el._handle = handle; el._hw = hw; el._trackW = x2 - x1;
+        const a = el.adj, st = a.step || 1;
+        const valAt = (clientX) => { const r = node.getBoundingClientRect(); let f = (clientX - r.left) / r.width;
+          f = Math.min(1, Math.max(0, f)); let v = a.min + f * (a.max - a.min); v = Math.round(v / st) * st;
+          return Math.min(a.max, Math.max(a.min, +v.toFixed(4))); };
+        let dragging = false;
+        node.addEventListener('pointerdown', (e) => { dragging = true; try { node.setPointerCapture(e.pointerId); } catch (x) {} this._fire(el.action, el, valAt(e.clientX)); });
+        node.addEventListener('pointermove', (e) => { if (dragging) this._fire(el.action, el, valAt(e.clientX)); });
+        node.addEventListener('pointerup', () => { dragging = false; });
+        node.addEventListener('pointercancel', () => { dragging = false; });
       } else if (el.kind === 'graph') {
         node = document.createElement('div');
         node.className = 'ographic';
@@ -73,9 +106,9 @@ export class PageHost {
 
   registerGraph(id, mountFn) { this._graphMount = this._graphMount || {}; this._graphMount[id] = mountFn; }
 
-  _fire(action, el) {
+  _fire(action, el, extra) {
     const fn = this.actions[action];
-    if (fn) { logger.info('tap:', action); fn(el, this); }
+    if (fn) { fn(el, this, extra); }
     else logger.warn('no action for', action);
   }
 
@@ -85,7 +118,7 @@ export class PageHost {
     const img = this.config.pages[pageId].replace(/\.(png|jpe?g)$/i, '.avif');
     this.page.style.backgroundImage = `url("${this.config.imgBase}${img}")`;
     for (const { el, node } of this.nodes) {
-      const on = el.pages.includes(pageId) || el.pages.includes('*');
+      const on = (el.pages.includes(pageId) || el.pages.includes('*')) && !(el.notPages && el.notPages.includes(pageId));
       node.style.display = on ? (el.kind === 'button' ? 'block' : (el.kind === 'graph' ? 'block' : 'block')) : 'none';
       if (on && el.kind === 'graph' && !el._mounted && this._graphMount && this._graphMount[el.id]) {
         this.graphs[el.id] = this._graphMount[el.id](node);
@@ -99,8 +132,18 @@ export class PageHost {
     if (live) this.live = live;
     for (const { el, node } of this.nodes) {
       if (node.style.display === 'none') continue;
-      if ((el.kind === 'var') && el.bind) {
+      if (el.kind === 'var' && el.bind) {
         try { node.textContent = el.bind(this.live) ?? ''; } catch (e) { /* ignore */ }
+      }
+      if (el.kind === 'var' && el.fillBind) {
+        try { node.style.color = el.fillBind(this.live) || el.fill || '#000'; } catch (e) { /* ignore */ }
+      }
+      if (el.kind === 'box' && el.bind) {
+        try { const s = el.bind(this.live) || {}; if (s.bg) node.style.background = s.bg; if (s.left != null) node.style.left = s.left + 'px'; } catch (e) { /* ignore */ }
+      }
+      if (el.kind === 'slider' && el.valueBind) {
+        try { const a = el.adj; let f = (el.valueBind(this.live) - a.min) / (a.max - a.min);
+          f = Math.min(1, Math.max(0, f)); el._handle.style.left = (f * (el._trackW - el._hw)) + 'px'; } catch (e) { /* ignore */ }
       }
     }
   }
