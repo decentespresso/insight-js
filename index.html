@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Insight</title>
+  <link rel="stylesheet" href="src/css/insight.css">
+  <script type="importmap">
+    { "imports": { "src/": "./src/" } }
+  </script>
+  <script src="src/modules/reconnecting-websocket.js"></script>
+  <script src="src/modules/plotly-3.1.0.min.js"></script>
+</head>
+<body>
+  <!-- The Insight background image IS the whole screen. Overlays (live text,
+       tap zones, graphs) are positioned in native 2560x1600 coords inside
+       #page, which is scaled to fit #stage. -->
+  <div id="stage">
+    <div id="page"><!-- current page renders here --></div>
+  </div>
+  <script type="module" src="src/modules/app.js"></script>
+</body>
+</html>

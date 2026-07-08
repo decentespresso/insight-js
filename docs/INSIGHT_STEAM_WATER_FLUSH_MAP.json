@@ -1,0 +1,1027 @@
+{
+  "meta": {
+    "skin": "Insight",
+    "coordinate_system": "2560x1600 (base)",
+    "display_scale": "0.5 -> 1280x800",
+    "description": "Exact tap zones, live variables, and static text for STEAM, WATER, and FLUSH pages"
+  },
+  "steam": {
+    "config": {
+      "page_name": "steam_1",
+      "background_image": "steam_1.png",
+      "buttons": [
+        {
+          "description": "START/GO button (green circle center)",
+          "rect": [1030, 240, 2560, 1100],
+          "action": "start_steam if not disabled"
+        },
+        {
+          "description": "steam_timeout adjuster (vertical clicker)",
+          "rect": [200, 580, 900, 1150],
+          "action": "vertical_clicker 9 1 ::settings(steam_timeout) 0 255",
+          "setting_changed": "steam_timeout",
+          "delta": "1 second per increment",
+          "min": 1,
+          "max": 255,
+          "step": 1
+        },
+        {
+          "description": "steam_timeout dialog button",
+          "rect": [337, 1180, 737, 1370],
+          "action": "dui_number_editor ::settings(steam_timeout)",
+          "setting_changed": "steam_timeout"
+        },
+        {
+          "description": "steam_1 to steam_3 back button",
+          "rect": [0, 240, 1000, 1400],
+          "action": "set_next_page off steam_1; start_idle"
+        }
+      ],
+      "variables": [
+        {
+          "x": 1396,
+          "y": 775,
+          "anchor": "center",
+          "font": "Helv_18_bold",
+          "fill": "#2d3046",
+          "proc": "start_text_if_steam_ready",
+          "meaning": "START button text",
+          "setting_key": "N/A"
+        },
+        {
+          "x": 537,
+          "y": 1250,
+          "anchor": "center",
+          "font": "Helv_10_bold",
+          "fill": "#4e85f4",
+          "proc": "seconds_text $::settings(steam_timeout)",
+          "meaning": "current steam_timeout value displayed",
+          "setting_key": "steam_timeout",
+          "note": "Big number user taps on to edit"
+        },
+        {
+          "x": 1700,
+          "y": 1200,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#969eb1",
+          "proc": "return_steam_temperature_measurement $::settings(steam_temperature)",
+          "meaning": "Preheat to temperature display",
+          "setting_key": "steam_temperature",
+          "default": 165,
+          "min": 140,
+          "max": 200
+        },
+        {
+          "x": 1700,
+          "y": 1300,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#969eb1",
+          "proc": "return_steam_flow_calibration $::settings(steam_flow)",
+          "meaning": "Flow rate max display",
+          "setting_key": "steam_flow",
+          "default": 150,
+          "min": 40,
+          "max": 250
+        }
+      ],
+      "static_texts": [
+        {
+          "x": 1396,
+          "y": 865,
+          "font": "Helv_10",
+          "fill": "#7f879a",
+          "text": "STEAM"
+        },
+        {
+          "x": 70,
+          "y": 250,
+          "font": "Helv_9_bold",
+          "fill": "#5a5d75",
+          "text": "1) Choose auto-off time"
+        },
+        {
+          "x": 1070,
+          "y": 250,
+          "font": "Helv_9_bold",
+          "fill": "#5a5d75",
+          "text": "2) Steam your milk"
+        },
+        {
+          "x": 537,
+          "y": 1300,
+          "font": "Helv_7",
+          "fill": "#4e85f4",
+          "text": "AUTO-OFF"
+        }
+      ]
+    },
+    "running": {
+      "page_name": "steam",
+      "background_image": "steam_2.png",
+      "buttons": [
+        {
+          "description": "STOP button",
+          "rect": [0, 240, 2560, 1400],
+          "action": "start_idle"
+        }
+      ],
+      "variables": [
+        {
+          "x": 1396,
+          "y": 775,
+          "anchor": "center",
+          "font": "Helv_18_bold",
+          "fill": "#2d3046",
+          "proc": "stop_text_if_espresso_stoppable",
+          "meaning": "STOP button text"
+        },
+        {
+          "x": 537,
+          "y": 1250,
+          "anchor": "center",
+          "font": "Helv_10_bold",
+          "fill": "#7f879a",
+          "proc": "seconds_text $::settings(steam_timeout)",
+          "meaning": "auto-off time (read-only during steam)"
+        },
+        {
+          "x": 2470,
+          "y": 350,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#42465c",
+          "proc": "steam_pour_timer",
+          "meaning": "live steaming elapsed time (seconds)"
+        },
+        {
+          "x": 2470,
+          "y": 450,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#42465c",
+          "proc": "steamtemp_text",
+          "meaning": "live steam heater temperature"
+        },
+        {
+          "x": 2470,
+          "y": 500,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#42465c",
+          "proc": "pressure_text",
+          "meaning": "live steam pressure (bar)"
+        },
+        {
+          "x": 2470,
+          "y": 550,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#42465c",
+          "proc": "return_steam_flow_calibration $::settings(steam_flow)",
+          "meaning": "max steam flow rate setting"
+        },
+        {
+          "x": 2470,
+          "y": 600,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#42465c",
+          "proc": "waterflow_text",
+          "meaning": "live steam flow rate (mL/s)"
+        }
+      ],
+      "graphs": [
+        {
+          "x": 1810,
+          "y": 1090,
+          "width": 700,
+          "height": 300,
+          "series": ["steam_pressure", "steam_flow", "steam_flow_goal", "steam_temperature100th"],
+          "y_axis_range": "auto (0.0+)",
+          "x_axis": "elapsed time"
+        }
+      ],
+      "widgets": [
+        {
+          "type": "scale (slider)",
+          "x": 10,
+          "y": 1436,
+          "variable": "::settings(steam_flow)",
+          "from": 40,
+          "to": 250,
+          "resolution": 10,
+          "width": 2000,
+          "height": 150,
+          "meaning": "realtime steam flow control during steaming"
+        }
+      ]
+    },
+    "done": {
+      "page_name": "steam_3",
+      "background_image": "steam_3.png",
+      "buttons": [
+        {
+          "description": "RESTART button (green circle center)",
+          "rect": [1030, 240, 2560, 1070],
+          "action": "start_steam if not disabled"
+        },
+        {
+          "description": "back/exit button",
+          "rect": [0, 240, 1000, 1400],
+          "action": "set_next_page off steam_1; start_idle"
+        }
+      ],
+      "variables": [
+        {
+          "x": 1396,
+          "y": 775,
+          "anchor": "center",
+          "font": "Helv_18_bold",
+          "fill": "#2d3046",
+          "proc": "restart_text_if_steam_ready",
+          "meaning": "RESTART button text"
+        },
+        {
+          "x": 537,
+          "y": 1250,
+          "anchor": "center",
+          "font": "Helv_10_bold",
+          "fill": "#7f879a",
+          "proc": "seconds_text $::settings(steam_timeout)",
+          "meaning": "auto-off time display (read-only)"
+        },
+        {
+          "x": 2470,
+          "y": 350,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#42465c",
+          "proc": "steam_pour_timer",
+          "meaning": "total steaming time"
+        },
+        {
+          "x": 2470,
+          "y": 400,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#42465c",
+          "proc": "steam_done_timer",
+          "meaning": "time since steam ended (for 'Done' message)"
+        }
+      ],
+      "graphs": [
+        {
+          "x": 1810,
+          "y": 1090,
+          "width": 700,
+          "height": 300,
+          "series": ["steam_pressure", "steam_flow", "steam_flow_goal", "steam_temperature100th"],
+          "description": "replay of steam session"
+        }
+      ]
+    },
+    "zoomed": {
+      "page_name": "steam_zoom",
+      "background_image": "steam_2.png",
+      "buttons": [
+        {
+          "description": "STOP button (rounded outline)",
+          "x1": 2100,
+          "y1": 1450,
+          "x2": 2540,
+          "y2": 1560,
+          "action": "start_idle; check_if_steam_clogged"
+        }
+      ],
+      "graphs": [
+        {
+          "x": 34,
+          "y": 214,
+          "width": 2490,
+          "height": 700,
+          "series": ["steam_pressure", "steam_flow", "steam_flow_goal"],
+          "y_axis_range": "auto (0.0+)",
+          "description": "large zoomed chart of pressure/flow"
+        },
+        {
+          "x": 34,
+          "y": 914,
+          "width": 2490,
+          "height": 490,
+          "series": ["steam_temperature"],
+          "y_axis_range": "130-180C or 250-350F",
+          "description": "zoomed temperature chart"
+        }
+      ]
+    },
+    "zoom_done": {
+      "page_name": "steam_zoom_3",
+      "background_image": "steam_3.png",
+      "graphs": [
+        {
+          "x": 34,
+          "y": 214,
+          "width": 2490,
+          "height": 700,
+          "series": ["steam_pressure", "steam_flow", "steam_flow_goal"],
+          "description": "replay zoomed pressure/flow"
+        },
+        {
+          "x": 34,
+          "y": 914,
+          "width": 2490,
+          "height": 490,
+          "series": ["steam_temperature"],
+          "y_axis_range": "130-180C or 250-350F",
+          "description": "replay zoomed temperature"
+        }
+      ]
+    },
+    "settings": {
+      "steam_timeout": {
+        "setting_key": "::settings(steam_timeout)",
+        "meaning": "Auto-off time for steam",
+        "default": 30,
+        "min": 1,
+        "max": 255,
+        "step": 1,
+        "unit": "seconds"
+      },
+      "steam_temperature": {
+        "setting_key": "::settings(steam_temperature)",
+        "meaning": "Target steam heater temperature",
+        "default": 165,
+        "min": 140,
+        "max": 200,
+        "step": 1,
+        "unit": "Celsius (approx)"
+      },
+      "steam_flow": {
+        "setting_key": "::settings(steam_flow)",
+        "meaning": "Maximum steam flow rate setting",
+        "default": 150,
+        "min": 40,
+        "max": 250,
+        "step": 10,
+        "unit": "flowmeter units"
+      }
+    }
+  },
+  "water": {
+    "config": {
+      "page_name": "water_1",
+      "background_image": "water_1.png",
+      "buttons": [
+        {
+          "description": "START button (green circle center)",
+          "rect": [1030, 240, 2560, 1400],
+          "action": "start_water"
+        },
+        {
+          "description": "water_volume adjuster (vertical clicker)",
+          "rect": [0, 560, 520, 1170],
+          "action": "vertical_clicker 40 10 ::settings(water_volume) 10 250",
+          "setting_changed": "water_volume",
+          "delta": "10 mL or grams per increment",
+          "min": 10,
+          "max": 250,
+          "step": 10
+        },
+        {
+          "description": "water_temperature adjuster (vertical clicker)",
+          "rect": [551, 450, 1000, 1180],
+          "action": "vertical_clicker 9 1 ::settings(water_temperature) 20 110",
+          "setting_changed": "water_temperature",
+          "delta": "1 degree per increment",
+          "min": 20,
+          "max": 110,
+          "step": 1
+        },
+        {
+          "description": "water_volume dialog button",
+          "rect": [137, 1200, 460, 1370],
+          "action": "dui_number_editor ::settings(water_volume)",
+          "setting_changed": "water_volume"
+        },
+        {
+          "description": "water_temperature dialog button",
+          "rect": [590, 1200, 920, 1380],
+          "action": "dui_number_editor ::settings(water_temperature)",
+          "setting_changed": "water_temperature"
+        },
+        {
+          "description": "back button",
+          "rect": [0, 240, 1000, 1400],
+          "action": "set_next_page off water_1; start_idle"
+        }
+      ],
+      "variables": [
+        {
+          "x": 1396,
+          "y": 775,
+          "anchor": "center",
+          "font": "Helv_18_bold",
+          "fill": "#2d3046",
+          "proc": "start_text_if_espresso_ready",
+          "meaning": "START button text"
+        },
+        {
+          "x": 300,
+          "y": 1250,
+          "anchor": "center",
+          "font": "Helv_10_bold",
+          "fill": "#4e85f4",
+          "proc": "return_weight_measurement $::settings(water_volume)",
+          "meaning": "current water volume/weight value (big tappable number)",
+          "setting_key": "water_volume",
+          "default": 50,
+          "min": 10,
+          "max": 250
+        },
+        {
+          "x": 755,
+          "y": 1250,
+          "anchor": "center",
+          "font": "Helv_10_bold",
+          "fill": "#4e85f4",
+          "proc": "return_temperature_measurement $::settings(water_temperature)",
+          "meaning": "current water temperature value (big tappable number)",
+          "setting_key": "water_temperature",
+          "default": 90,
+          "min": 20,
+          "max": 110
+        },
+        {
+          "x": 1700,
+          "y": 1300,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#969eb1",
+          "proc": "return_flow_measurement $::settings(hotwater_flow)",
+          "meaning": "max flow rate display",
+          "setting_key": "hotwater_flow",
+          "default": 5,
+          "min": 1,
+          "max": 10
+        }
+      ],
+      "static_texts": [
+        {
+          "x": 1396,
+          "y": 865,
+          "font": "Helv_10",
+          "fill": "#7f879a",
+          "text": "WATER"
+        },
+        {
+          "x": 70,
+          "y": 250,
+          "font": "Helv_9_bold",
+          "fill": "#5a5d75",
+          "text": "1) Choose quantity and temperature"
+        },
+        {
+          "x": 1070,
+          "y": 250,
+          "font": "Helv_9_bold",
+          "fill": "#5a5d75",
+          "text": "2) Hot water will pour"
+        },
+        {
+          "x": 300,
+          "y": 1300,
+          "font": "Helv_7",
+          "fill": "#4e85f4",
+          "text": "VOLUME or WEIGHT"
+        },
+        {
+          "x": 755,
+          "y": 1300,
+          "font": "Helv_7",
+          "fill": "#4e85f4",
+          "text": "TEMP"
+        }
+      ]
+    },
+    "running": {
+      "page_name": "water",
+      "background_image": "water_2.png",
+      "buttons": [
+        {
+          "description": "STOP button",
+          "rect": [0, 240, 2560, 1400],
+          "action": "start_idle"
+        }
+      ],
+      "variables": [
+        {
+          "x": 1396,
+          "y": 775,
+          "anchor": "center",
+          "font": "Helv_18_bold",
+          "fill": "#2d3046",
+          "proc": "stop_text_if_espresso_stoppable",
+          "meaning": "STOP button text"
+        },
+        {
+          "x": 300,
+          "y": 1250,
+          "anchor": "center",
+          "font": "Helv_10_bold",
+          "fill": "#7f879a",
+          "proc": "return_weight_measurement $::settings(water_volume)",
+          "meaning": "target volume/weight (read-only during pour)"
+        },
+        {
+          "x": 755,
+          "y": 1250,
+          "anchor": "center",
+          "font": "Helv_10_bold",
+          "fill": "#7f879a",
+          "proc": "return_temperature_measurement $::settings(water_temperature)",
+          "meaning": "target temperature (read-only during pour)"
+        },
+        {
+          "x": 2470,
+          "y": 1200,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#42465c",
+          "proc": "waterflow_text",
+          "meaning": "live water flow rate (mL/s)"
+        },
+        {
+          "x": 2470,
+          "y": 1250,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#42465c",
+          "proc": "water_pour_timer",
+          "meaning": "live pour elapsed time (seconds)"
+        },
+        {
+          "x": 2470,
+          "y": 1300,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#42465c",
+          "proc": "drink_weight_text",
+          "meaning": "total water dispensed (weight or volume)"
+        }
+      ],
+      "widgets": [
+        {
+          "type": "scale (slider)",
+          "x": 10,
+          "y": 1436,
+          "variable": "::settings(hotwater_flow)",
+          "from": 1,
+          "to": 10,
+          "resolution": 1,
+          "width": 2000,
+          "height": 150,
+          "meaning": "realtime max flow control during water pour"
+        }
+      ]
+    },
+    "done": {
+      "page_name": "water_3",
+      "background_image": "water_3.png",
+      "buttons": [
+        {
+          "description": "RESTART button (green circle center)",
+          "rect": [1030, 240, 2560, 1400],
+          "action": "start_water"
+        },
+        {
+          "description": "back button",
+          "rect": [0, 240, 1000, 1400],
+          "action": "set_next_page off water_1; start_idle"
+        }
+      ],
+      "variables": [
+        {
+          "x": 1396,
+          "y": 775,
+          "anchor": "center",
+          "font": "Helv_18_bold",
+          "fill": "#2d3046",
+          "proc": "restart_text_if_espresso_ready",
+          "meaning": "RESTART button text"
+        },
+        {
+          "x": 300,
+          "y": 1250,
+          "anchor": "center",
+          "font": "Helv_10_bold",
+          "fill": "#7f879a",
+          "proc": "return_weight_measurement $::settings(water_volume)",
+          "meaning": "target volume/weight (read-only)"
+        },
+        {
+          "x": 755,
+          "y": 1250,
+          "anchor": "center",
+          "font": "Helv_10_bold",
+          "fill": "#7f879a",
+          "proc": "return_temperature_measurement $::settings(water_temperature)",
+          "meaning": "target temperature (read-only)"
+        },
+        {
+          "x": 2470,
+          "y": 1200,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#42465c",
+          "proc": "water_pour_timer",
+          "meaning": "total pour time"
+        },
+        {
+          "x": 2470,
+          "y": 1250,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#42465c",
+          "proc": "water_done_timer",
+          "meaning": "time since pour ended (for 'Done' message)"
+        }
+      ]
+    },
+    "settings": {
+      "water_volume": {
+        "setting_key": "::settings(water_volume)",
+        "meaning": "Volume (or weight) of hot water to dispense",
+        "default": 50,
+        "min": 10,
+        "max": 250,
+        "step": 10,
+        "unit": "mL or grams (depending on scale)"
+      },
+      "water_temperature": {
+        "setting_key": "::settings(water_temperature)",
+        "meaning": "Target temperature for hot water",
+        "default": 90,
+        "min": 20,
+        "max": 110,
+        "step": 1,
+        "unit": "Celsius"
+      },
+      "hotwater_flow": {
+        "setting_key": "::settings(hotwater_flow)",
+        "meaning": "Maximum flow rate for hot water dispensing",
+        "default": 5,
+        "min": 1,
+        "max": 10,
+        "step": 1,
+        "unit": "flowmeter units"
+      }
+    }
+  },
+  "flush": {
+    "config": {
+      "page_name": "preheat_1",
+      "background_image": "preheat_1.png",
+      "buttons": [
+        {
+          "description": "START/GO button (green circle center)",
+          "rect": [1100, 240, 2560, 1400],
+          "action": "start_flush"
+        },
+        {
+          "description": "flush_seconds adjuster (vertical clicker)",
+          "rect": [290, 570, 750, 1160],
+          "action": "vertical_clicker 1 1 ::settings(flush_seconds) 3 120",
+          "setting_changed": "flush_seconds",
+          "delta": "1 second per increment",
+          "min": 3,
+          "max": 120,
+          "step": 1
+        },
+        {
+          "description": "flush_seconds dialog button",
+          "rect": [290, 1200, 750, 1380],
+          "action": "dui_number_editor ::settings(flush_seconds)",
+          "setting_changed": "flush_seconds"
+        },
+        {
+          "description": "back button",
+          "rect": [0, 240, 1000, 1400],
+          "action": "set_next_page off preheat_1; start_idle"
+        }
+      ],
+      "variables": [
+        {
+          "x": 1396,
+          "y": 775,
+          "anchor": "center",
+          "font": "Helv_18_bold",
+          "fill": "#2d3046",
+          "proc": "start_text_if_espresso_ready",
+          "meaning": "START button text"
+        },
+        {
+          "x": 520,
+          "y": 1250,
+          "anchor": "center",
+          "font": "Helv_10_bold",
+          "fill": "#4e85f4",
+          "proc": "seconds_text $::settings(flush_seconds)",
+          "meaning": "current auto-off time value (big tappable number)",
+          "setting_key": "flush_seconds",
+          "default": 10,
+          "min": 3,
+          "max": 120
+        },
+        {
+          "x": 1700,
+          "y": 1300,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#969eb1",
+          "proc": "return_flow_measurement $::settings(flush_flow)",
+          "meaning": "max flush flow rate display",
+          "setting_key": "flush_flow",
+          "default": 5,
+          "min": 1,
+          "max": 10
+        }
+      ],
+      "static_texts": [
+        {
+          "x": 1396,
+          "y": 865,
+          "font": "Helv_10",
+          "fill": "#7f879a",
+          "text": "FLUSH"
+        },
+        {
+          "x": 70,
+          "y": 250,
+          "font": "Helv_9_bold",
+          "fill": "#5a5d75",
+          "text": "1) Choose auto-off time"
+        },
+        {
+          "x": 1070,
+          "y": 250,
+          "font": "Helv_9_bold",
+          "fill": "#5a5d75",
+          "text": "2) Hot water will pour"
+        },
+        {
+          "x": 520,
+          "y": 1300,
+          "font": "Helv_7",
+          "fill": "#4e85f4",
+          "text": "AUTO-OFF"
+        },
+        {
+          "x": 1100,
+          "y": 1300,
+          "font": "Helv_8",
+          "fill": "#969eb1",
+          "text": "Flow rate max"
+        }
+      ]
+    },
+    "running": {
+      "page_name": "preheat_2",
+      "background_image": "preheat_2.png",
+      "buttons": [
+        {
+          "description": "STOP button",
+          "rect": [0, 240, 2560, 1600],
+          "action": "start_idle"
+        }
+      ],
+      "variables": [
+        {
+          "x": 1396,
+          "y": 775,
+          "anchor": "center",
+          "font": "Helv_18_bold",
+          "fill": "#2d3046",
+          "proc": "stop_text_if_espresso_stoppable",
+          "meaning": "STOP button text"
+        },
+        {
+          "x": 520,
+          "y": 1250,
+          "anchor": "center",
+          "font": "Helv_10_bold",
+          "fill": "#7f879a",
+          "proc": "seconds_text $::settings(flush_seconds)",
+          "meaning": "auto-off time display (read-only during flush)"
+        },
+        {
+          "x": 2470,
+          "y": 1250,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#42465c",
+          "proc": "flush_pour_timer",
+          "meaning": "live flush elapsed time (seconds)"
+        },
+        {
+          "x": 2470,
+          "y": 1200,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#42465c",
+          "proc": "watertemp_text",
+          "meaning": "live water heater temperature"
+        }
+      ],
+      "widgets": [
+        {
+          "type": "scale (slider)",
+          "x": 10,
+          "y": 1436,
+          "variable": "::settings(flush_flow)",
+          "from": 1,
+          "to": 10,
+          "resolution": 1,
+          "width": 2000,
+          "height": 150,
+          "meaning": "realtime max flow control during flush"
+        }
+      ]
+    },
+    "done_1": {
+      "page_name": "preheat_3",
+      "background_image": "preheat_3.png",
+      "buttons": [
+        {
+          "description": "back/restart button",
+          "rect": [0, 240, 1000, 1400],
+          "action": "set_next_page off preheat_1; start_idle"
+        }
+      ],
+      "variables": [
+        {
+          "x": 1396,
+          "y": 775,
+          "anchor": "center",
+          "font": "Helv_18_bold",
+          "fill": "#2d3046",
+          "proc": "restart_text_if_espresso_ready",
+          "meaning": "RESTART button text"
+        },
+        {
+          "x": 520,
+          "y": 1250,
+          "anchor": "center",
+          "font": "Helv_10_bold",
+          "fill": "#7f879a",
+          "proc": "seconds_text $::settings(flush_seconds)",
+          "meaning": "auto-off time (read-only)"
+        },
+        {
+          "x": 2470,
+          "y": 1250,
+          "anchor": "ne",
+          "font": "Helv_8",
+          "fill": "#42465c",
+          "proc": "flush_done_timer",
+          "meaning": "time since flush ended (for 'Done' message)"
+        }
+      ]
+    },
+    "done_2": {
+      "page_name": "preheat_4",
+      "background_image": "preheat_4.png",
+      "buttons": [
+        {
+          "description": "back/restart button",
+          "rect": [0, 240, 1000, 1400],
+          "action": "set_next_page off preheat_1; start_idle"
+        }
+      ],
+      "variables": [
+        {
+          "x": 1396,
+          "y": 775,
+          "anchor": "center",
+          "font": "Helv_18_bold",
+          "fill": "#2d3046",
+          "proc": "restart_text_if_espresso_ready",
+          "meaning": "RESTART button text"
+        },
+        {
+          "x": 520,
+          "y": 1250,
+          "anchor": "center",
+          "font": "Helv_10_bold",
+          "fill": "#7f879a",
+          "proc": "seconds_text $::settings(flush_seconds)",
+          "meaning": "auto-off time (read-only)"
+        }
+      ]
+    },
+    "settings": {
+      "flush_seconds": {
+        "setting_key": "::settings(flush_seconds)",
+        "meaning": "Auto-off time for flush/preheat",
+        "default": 10,
+        "min": 3,
+        "max": 120,
+        "step": 1,
+        "unit": "seconds"
+      },
+      "flush_flow": {
+        "setting_key": "::settings(flush_flow)",
+        "meaning": "Maximum flow rate for flush/preheat",
+        "default": 5,
+        "min": 1,
+        "max": 10,
+        "step": 1,
+        "unit": "flowmeter units"
+      }
+    }
+  },
+  "top_nav": {
+    "buttons": [
+      {
+        "description": "FLUSH tab",
+        "rect": [0, 0, 641, 188],
+        "x_center": 380,
+        "y_center": 100,
+        "active_pages": ["preheat_1", "preheat_2", "preheat_3", "preheat_4"],
+        "action": "set_next_page off preheat_1"
+      },
+      {
+        "description": "ESPRESSO tab",
+        "rect": [642, 0, 1277, 188],
+        "x_center": 1040,
+        "y_center": 100,
+        "action": "set_next_page off [current_espresso_page]"
+      },
+      {
+        "description": "STEAM tab",
+        "rect": [1278, 0, 1904, 188],
+        "x_center": 1646,
+        "y_center": 100,
+        "active_pages": ["steam_1", "steam", "steam_3", "steam_zoom", "steam_zoom_3"],
+        "action": "set_next_page off steam_1"
+      },
+      {
+        "description": "WATER tab",
+        "rect": [1905, 0, 2560, 188],
+        "x_center": 2276,
+        "y_center": 100,
+        "active_pages": ["water_1", "water", "water_3"],
+        "action": "set_next_page off water_1"
+      }
+    ],
+    "texts": [
+      {
+        "x": 380,
+        "y": 100,
+        "text": "FLUSH",
+        "font": "Helv_10_bold",
+        "fill_selected": "#2d3046",
+        "fill_unselected": "#8c8d96"
+      },
+      {
+        "x": 1040,
+        "y": 100,
+        "text": "ESPRESSO",
+        "font": "Helv_10_bold",
+        "fill_selected": "#2d3046",
+        "fill_unselected": "#8c8d96"
+      },
+      {
+        "x": 1646,
+        "y": 100,
+        "text": "STEAM",
+        "font": "Helv_10_bold",
+        "fill_selected": "#2d3046",
+        "fill_unselected": "#8c8d96"
+      },
+      {
+        "x": 2276,
+        "y": 100,
+        "text": "WATER",
+        "font": "Helv_10_bold",
+        "fill_selected": "#2d3046",
+        "fill_unselected": "#8c8d96"
+      }
+    ]
+  },
+  "global_buttons": [
+    {
+      "description": "SETTINGS button (bottom right)",
+      "rect": [2285, 1420, 2560, 1600],
+      "pages": ["off", "off_zoomed", "espresso_3", "espresso_3_zoomed", "steam_1", "water_1", "preheat_1", "steam_3", "steam_zoom_3", "water_3", "preheat_3", "preheat_4", "off_zoomed_temperature", "espresso_3_zoomed_temperature"],
+      "action": "show_settings"
+    },
+    {
+      "description": "SLEEP button (bottom right)",
+      "rect": [2014, 1420, 2284, 1600],
+      "pages": ["off", "espresso_3", "preheat_1", "preheat_3", "preheat_4", "steam_1", "steam_3", "steam_zoom_3", "water_1", "water_3"],
+      "action": "start_sleep"
+    }
+  ]
+}

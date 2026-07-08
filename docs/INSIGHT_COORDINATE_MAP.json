@@ -1,0 +1,807 @@
+{
+  "metadata": {
+    "skin": "Insight (DE1+)",
+    "canvas": {
+      "width": 2560,
+      "height": 1600,
+      "scale_to_1280x800": "multiply by 0.5"
+    },
+    "pages_covered": [
+      "off",
+      "off_zoomed",
+      "off_zoomed_temperature",
+      "espresso",
+      "espresso_zoomed",
+      "espresso_zoomed_temperature",
+      "espresso_3",
+      "espresso_3_zoomed",
+      "espresso_3_zoomed_temperature"
+    ]
+  },
+
+  "resolved_variables": {
+    "pos_top": 720,
+    "spacer": 38,
+    "column1_pos": 2060,
+    "column2_default": 2195,
+    "column2_fahrenheit": 2210,
+    "column3_pos": 2512,
+    "charts_width": 1990,
+    "green_button_font": "Helv_18_bold",
+    "label_font": "Helv_10_bold"
+  },
+
+  "background_images": {
+    "off": "espresso_3.png",
+    "off_zoomed": "espresso_3_zoomed.png",
+    "off_zoomed_temperature": "espresso_3_zoomed.png",
+    "espresso": "espresso_2.png",
+    "espresso_zoomed": "espresso_2_zoomed.png",
+    "espresso_zoomed_temperature": "espresso_2_zoomed.png",
+    "espresso_3": "espresso_3.png",
+    "espresso_3_zoomed": "espresso_3_zoomed.png",
+    "espresso_3_zoomed_temperature": "espresso_3_zoomed.png",
+    "note": "All images are 2560x1600. Base layout uses espresso_3.png for off state, espresso_2.png for active pouring, espresso_3.png for post-shot review."
+  },
+
+  "fonts": {
+    "note": "Sizes are at 2560 base. Actual pixel size = size * fontm, where fontm is dynamic (typically ~0.7-1.0 on desktop). See de1plus/utils.tcl for font creation.",
+    "Helv_6": "12 * fontm px",
+    "Helv_7": "14 * fontm px",
+    "Helv_7_bold": "14 * fontm px",
+    "Helv_8": "16 * fontm px",
+    "Helv_9": "18 * fontm px",
+    "Helv_9_bold": "18 * fontm px",
+    "Helv_10": "19 * fontm px",
+    "Helv_10_bold": "19 * fontm px",
+    "Helv_15_bold": "24 * fontm px",
+    "Helv_18_bold": "32 * fontm px (green button font)",
+    "Helv_20_bold": "37 * fontm px"
+  },
+
+  "colors": {
+    "light_mode": {
+      "pressurelinecolor": "#00b672",
+      "flow_line_color": "#6c9bff",
+      "temperature_line_color": "#ff7880",
+      "lighter": "#969eb1",
+      "dark": "#5a5d75",
+      "lightest": "#bec7db",
+      "datacard_data_color": "#42465c",
+      "startbutton_font_color": "#2d3046",
+      "toptab_selected_color": "#2d3046",
+      "toptab_unselected_color": "#8c8d96",
+      "chart_background": "#FFFFFF",
+      "grid_color": "#E0E0E0",
+      "progress_text_color": "#5a5d75",
+      "noprogress_text_color": "#b1b9cd",
+      "tappable_text_color": "#4e85f4",
+      "water_level_background": "#ededfa"
+    },
+    "dark_mode": {
+      "pressurelinecolor": "#50c17b",
+      "flow_line_color": "#7ca8ff",
+      "temperature_line_color": "#ff5a67",
+      "lighter": "#a3abbf",
+      "dark": "#c2c5e1",
+      "lightest": "#bec7db",
+      "datacard_data_color": "#8b90a8",
+      "startbutton_font_color": "#aeb0b1",
+      "toptab_selected_color": "#aeb0b1",
+      "toptab_unselected_color": "#4f5254",
+      "chart_background": "#272d32",
+      "grid_color": "#444444",
+      "progress_text_color": "#b1b9cd",
+      "noprogress_text_color": "#5a5d75",
+      "water_level_background": "#1f2429"
+    }
+  },
+
+  "buttons": {
+    "top_navigation": [
+      {
+        "id": "nav_flush",
+        "pages": ["all espresso pages"],
+        "rect": [0, 0, 641, 188],
+        "action": "Flush espresso group (preheating)",
+        "label_x": 380,
+        "label_y": 100,
+        "label_text": "[translate 'FLUSH']",
+        "label_font": "label_font (Helv_10_bold)",
+        "label_color": "toptab_selected_color on espresso tabs, toptab_unselected_color on others"
+      },
+      {
+        "id": "nav_espresso",
+        "pages": ["all espresso pages"],
+        "rect": [642, 0, 1277, 188],
+        "action": "Navigate to espresso page",
+        "label_x": 1040,
+        "label_y": 100,
+        "label_text": "[translate 'ESPRESSO']",
+        "label_color": "toptab_selected_color on espresso tabs"
+      },
+      {
+        "id": "nav_steam",
+        "pages": ["all espresso pages"],
+        "rect": [1278, 0, 1904, 188],
+        "action": "Navigate to steam page",
+        "label_x": 1646,
+        "label_y": 100,
+        "label_text": "[translate 'STEAM']"
+      },
+      {
+        "id": "nav_water",
+        "pages": ["all espresso pages"],
+        "rect": [1905, 0, 2560, 188],
+        "action": "Navigate to hot water page",
+        "label_x": 2276,
+        "label_y": 100,
+        "label_text": "[translate 'WATER']"
+      },
+      {
+        "id": "nav_steam_zoomed",
+        "pages": ["off_zoomed", "espresso_3_zoomed", "off_zoomed_temperature", "espresso_3_zoomed_temperature"],
+        "rect": [2020, 0, 2550, 180],
+        "action": "Steam from zoomed view"
+      }
+    ],
+
+    "espresso_control": [
+      {
+        "id": "start_espresso",
+        "pages": ["off", "off_zoomed", "espresso_3", "espresso_3_zoomed", "off_zoomed_temperature", "espresso_3_zoomed_temperature"],
+        "rect": [2020, 240, 2560, 700],
+        "action": "Start/restart espresso shot"
+      },
+      {
+        "id": "stop_espresso",
+        "pages": ["espresso", "espresso_zoomed", "espresso_zoomed_temperature"],
+        "rect": [2020, 240, 2560, 1200],
+        "action": "Stop espresso pour and go to espresso_3 state"
+      }
+    ],
+
+    "zoom_controls": [
+      {
+        "id": "zoom_pressure_flow",
+        "pages": ["off", "espresso", "espresso_3"],
+        "rect": [10, 240, 2012, 1135],
+        "action": "Zoom to off_zoomed/espresso_zoomed/espresso_3_zoomed"
+      },
+      {
+        "id": "zoom_temperature",
+        "pages": ["off", "espresso", "espresso_3"],
+        "rect": [10, 1136, 2012, 1600],
+        "action": "Zoom to off_zoomed_temperature/espresso_zoomed_temperature/espresso_3_zoomed_temperature"
+      },
+      {
+        "id": "unzoom_pressure_flow",
+        "pages": ["off_zoomed", "espresso_zoomed", "espresso_3_zoomed"],
+        "rect": [1, 100, 2012, 1135],
+        "action": "Unzoom to non-zoomed view"
+      },
+      {
+        "id": "unzoom_temperature",
+        "pages": ["off_zoomed_temperature", "espresso_zoomed_temperature", "espresso_3_zoomed_temperature"],
+        "rect": [1, 1, 2012, 1600],
+        "action": "Unzoom to non-zoomed view"
+      }
+    ],
+
+    "settings_and_utility": [
+      {
+        "id": "profile_select",
+        "pages": ["off", "off_zoomed", "espresso_3", "espresso_3_zoomed", "off_zoomed_temperature", "espresso_3_zoomed_temperature"],
+        "rect": [2040, 1072, 2400, 1180],
+        "action": "Open profile select dialog"
+      },
+      {
+        "id": "temperature_settings",
+        "pages": ["off", "off_zoomed", "espresso_3", "espresso_3_zoomed", "off_zoomed_temperature", "espresso_3_zoomed_temperature"],
+        "rect": [2040, 720, 2560, 1070],
+        "action": "Open settings (espresso profile editor)"
+      },
+      {
+        "id": "describe_espresso",
+        "pages": ["off", "off_zoomed", "espresso_3", "espresso_3_zoomed", "off_zoomed_temperature", "espresso_3_zoomed_temperature"],
+        "rect": [2420, 1200, 2560, 1400],
+        "action": "Open DYE shot description and god-shot comparison"
+      },
+      {
+        "id": "skip_step",
+        "pages": ["espresso", "espresso_zoomed", "espresso_zoomed_temperature"],
+        "rect": [2020, 1204, 2560, 1600],
+        "action": "Skip to next step in profile"
+      },
+      {
+        "id": "settings",
+        "pages": ["off", "off_zoomed", "espresso_3", "espresso_3_zoomed", "steam_1", "water_1", "preheat_1", "steam_3", "steam_zoom_3", "water_3", "preheat_3", "preheat_4", "off_zoomed_temperature", "espresso_3_zoomed_temperature"],
+        "rect": [2285, 1420, 2560, 1600],
+        "action": "Open main settings menu"
+      },
+      {
+        "id": "sleep",
+        "pages": ["all espresso pages"],
+        "rect": [2014, 1420, 2284, 1600],
+        "action": "Put machine to sleep"
+      }
+    ]
+  },
+
+  "live_variables": {
+    "start_stop_restart_button": {
+      "x": 2290,
+      "y": 390,
+      "font": "Helv_18_bold (green_button_font)",
+      "fill": "startbutton_font_color",
+      "anchor": "center",
+      "variants": [
+        {
+          "pages": ["off", "off_zoomed", "off_zoomed_temperature"],
+          "text": "START",
+          "proc": "start_text_if_espresso_ready"
+        },
+        {
+          "pages": ["espresso", "espresso_zoomed", "espresso_zoomed_temperature"],
+          "text": "STOP",
+          "proc": "stop_text_if_espresso_stoppable"
+        },
+        {
+          "pages": ["espresso_3", "espresso_3_zoomed", "espresso_3_zoomed_temperature"],
+          "text": "RESTART",
+          "proc": "espresso_history_save_from_gui"
+        }
+      ]
+    },
+
+    "substate": {
+      "x": 2295,
+      "y": 520,
+      "font": "Helv_7",
+      "fill": "#999999",
+      "pages": "all espresso pages",
+      "proc": "de1_substate_text",
+      "description": "Machine substate (e.g., 'heating', 'preinfusion', 'pouring')"
+    },
+
+    "connection_status": {
+      "x": 2295,
+      "y": 560,
+      "font": "Helv_6",
+      "fill": "#CCCCCC",
+      "width": 1040,
+      "pages": "all espresso pages",
+      "proc": "de1_connected_state",
+      "description": "Connection indicator (e.g., 'Connected' or 'Disconnected')"
+    },
+
+    "time_column": {
+      "x": 2060,
+      "font": "Helv_7",
+      "fill": "lighter",
+      "rows": [
+        {
+          "y_offset": "pos_top + 1*spacer = 758",
+          "label": "Preinfusion time",
+          "proc": "preinfusion_pour_timer_text",
+          "unit": "seconds"
+        },
+        {
+          "y_offset": "pos_top + 2*spacer = 796",
+          "label": "Pour time",
+          "proc": "pouring_timer_text",
+          "unit": "seconds since pour start"
+        },
+        {
+          "y_offset": "pos_top + 3*spacer = 834",
+          "label": "Total time",
+          "proc": "total_pour_timer_text",
+          "unit": "seconds from shot start"
+        },
+        {
+          "y_offset": "pos_top + 4*spacer = 872",
+          "pages": ["off", "off_zoomed", "off_zoomed_temperature", "espresso_3", "espresso_3_zoomed", "espresso_3_zoomed_temperature"],
+          "label": "Time since done",
+          "proc": "espresso_done_timer_text",
+          "unit": "seconds"
+        }
+      ]
+    },
+
+    "volume_column": {
+      "x": 2512,
+      "font": "Helv_7",
+      "fill": "lighter",
+      "anchor": "ne",
+      "rows": [
+        {
+          "y_offset": "pos_top + 1*spacer = 758",
+          "label": "Preinfusion volume",
+          "proc": "preinfusion_volume",
+          "unit": "mL"
+        },
+        {
+          "y_offset": "pos_top + 2*spacer = 796",
+          "label": "Pour volume",
+          "proc": "pour_volume",
+          "unit": "mL dispensed in current pour"
+        },
+        {
+          "y_offset": "pos_top + 3*spacer = 834",
+          "label": "Total volume",
+          "proc": "watervolume_text",
+          "unit": "mL (target or actual)"
+        }
+      ]
+    },
+
+    "temperature_section": {
+      "label_y_off": "pos_top + 5.5*spacer = 929",
+      "label_y_espresso": "pos_top + 4.5*spacer = 891",
+      "font": "Helv_7_bold (label), Helv_7 (value)",
+      "fill": "dark (label), lighter (value)",
+      "rows": [
+        {
+          "pages": ["off", "off_zoomed", "off_zoomed_temperature", "espresso_3", "espresso_3_zoomed", "espresso_3_zoomed_temperature"],
+          "y_offset": "pos_top + 6.5*spacer = 967",
+          "label": "Temperature",
+          "proc": "espresso_goal_temp_text_rtl_aware",
+          "unit": "°C or °F (goal)"
+        },
+        {
+          "pages": ["espresso", "espresso_zoomed", "espresso_zoomed_temperature"],
+          "y_offset": "pos_top + 5.5*spacer = 929",
+          "label": "Temperature",
+          "proc": "espresso_goal_temp_text_rtl_aware",
+          "unit": "°C or °F (goal)"
+        },
+        {
+          "pages": ["off", "off_zoomed", "off_zoomed_temperature", "espresso_3", "espresso_3_zoomed", "espresso_3_zoomed_temperature"],
+          "y_offset": "pos_top + 7.5*spacer = 1005",
+          "label": "Group head metal temp",
+          "proc": "group_head_heater_temperature_text_rtl_aware",
+          "unit": "°C or °F (actual)"
+        },
+        {
+          "pages": ["espresso", "espresso_zoomed", "espresso_zoomed_temperature"],
+          "y_offset": "pos_top + 6.5*spacer = 967",
+          "label": "Coffee temp",
+          "proc": "coffee_temp_text_rtl_aware",
+          "unit": "°C or °F (basket temperature)"
+        }
+      ]
+    },
+
+    "flow_section_espresso_only": {
+      "x": 2060,
+      "font": "Helv_7",
+      "fill": "lighter",
+      "pages": ["espresso", "espresso_zoomed", "espresso_zoomed_temperature"],
+      "rows": [
+        {
+          "y_offset": "pos_top + 8*spacer = 1043",
+          "type": "label",
+          "font": "Helv_7_bold",
+          "fill": "dark",
+          "text": "Flow"
+        },
+        {
+          "y_offset": "pos_top + 9*spacer = 1081",
+          "label": "Water flow",
+          "proc": "waterflow_text",
+          "unit": "mL/s"
+        },
+        {
+          "y_offset": "pos_top + 10*spacer = 1119",
+          "label": "Pressure",
+          "proc": "pressure_text",
+          "unit": "bar"
+        }
+      ]
+    },
+
+    "weight_section": {
+      "x": 2060,
+      "font": "Helv_7",
+      "fill": "lighter",
+      "note": "Only displays if scale_bluetooth_address is configured",
+      "off_variant": {
+        "pages": ["off", "off_zoomed", "off_zoomed_temperature", "espresso_3", "espresso_3_zoomed", "espresso_3_zoomed_temperature"],
+        "rows": [
+          {
+            "y_offset": "pos_top + 12.5*spacer = 1195",
+            "type": "label",
+            "font": "Helv_7_bold",
+            "fill": "dark",
+            "proc": "waterweight_label_text"
+          },
+          {
+            "y_offset": "pos_top + 13.5*spacer = 1233",
+            "label": "Weight with target",
+            "description": "Shows actual weight and target (if set). Complex conditional: scale + final_desired_shot_weight settings."
+          }
+        ]
+      },
+      "espresso_variant": {
+        "pages": ["espresso", "espresso_zoomed", "espresso_zoomed_temperature"],
+        "rows": [
+          {
+            "y_offset": "pos_top + 17.5*spacer = 1385",
+            "type": "label",
+            "font": "Helv_7_bold",
+            "fill": "dark",
+            "proc": "waterweight_label_text"
+          },
+          {
+            "y_offset": "pos_top + 18.5*spacer = 1423",
+            "label": "Weight flow",
+            "proc": "waterweightflow_text",
+            "unit": "g/s (flow rate by weight)"
+          },
+          {
+            "y_offset": "pos_top + 19.5*spacer = 1461",
+            "label": "Total weight with target",
+            "description": "Shows cumulative weight and target."
+          }
+        ]
+      }
+    },
+
+    "profile_section": {
+      "x": 2060,
+      "font": "Helv_7_bold (label), Helv_7 (value)",
+      "fill": "dark (label), lighter (value)",
+      "off_variant": {
+        "pages": ["off", "off_zoomed", "off_zoomed_temperature", "espresso_3", "espresso_3_zoomed", "espresso_3_zoomed_temperature"],
+        "rows": [
+          {
+            "y_offset": "pos_top + 9*spacer = 1081",
+            "type": "label",
+            "proc": "profile_type_text"
+          },
+          {
+            "y_offset": "pos_top + 10*spacer = 1119",
+            "label": "Profile name (line 1/2)",
+            "proc": "wrapped_profile_string_part [profile_title] 29 0",
+            "description": "First line of profile name (29 chars max per line)"
+          },
+          {
+            "y_offset": "pos_top + 11*spacer = 1157",
+            "label": "Profile name (line 2/2)",
+            "proc": "wrapped_profile_string_part [profile_title] 29 1",
+            "description": "Second line of profile name"
+          }
+        ]
+      },
+      "espresso_variant": {
+        "pages": ["espresso", "espresso_zoomed", "espresso_zoomed_temperature"],
+        "rows": [
+          {
+            "y_offset": "pos_top + 11.5*spacer = 1157",
+            "type": "label",
+            "proc": "profile_type_text"
+          },
+          {
+            "y_offset": "pos_top + 12.5*spacer = 1195",
+            "label": "Profile name (line 1/2)",
+            "proc": "wrapped_profile_string_part [profile_title] 29 0"
+          },
+          {
+            "y_offset": "pos_top + 13.5*spacer = 1233",
+            "label": "Profile name (line 2/2)",
+            "proc": "wrapped_profile_string_part [profile_title] 29 1"
+          }
+        ]
+      }
+    },
+
+    "current_step": {
+      "pages": ["espresso", "espresso_zoomed", "espresso_zoomed_temperature"],
+      "x": 2060,
+      "y": "pos_top + 15*spacer = 1290 (label), pos_top + 16*spacer = 1328 (value)",
+      "font": "Helv_7_bold (label), Helv_7 (value)",
+      "fill": "dark (label), #8297be (value)",
+      "rows": [
+        {
+          "label": "Current step",
+          "source": "$::settings(current_frame_description)",
+          "description": "Current profile frame/step being executed"
+        },
+        {
+          "x": 2512,
+          "anchor": "ne",
+          "label": "[skip]",
+          "description": "Tap to skip to next step"
+        }
+      ]
+    }
+  },
+
+  "static_text_labels": {
+    "chart_axis_labels": [
+      {
+        "pages": ["off_zoomed", "espresso_zoomed", "espresso_3_zoomed"],
+        "x": 40,
+        "y": 30,
+        "text": "[translate 'Flow (mL/s)']",
+        "font": "Helv_7_bold",
+        "fill": "flow_label_color (#6c9bff)",
+        "anchor": "nw"
+      },
+      {
+        "pages": ["off_zoomed", "espresso_zoomed", "espresso_3_zoomed"],
+        "x": 1970,
+        "y": 30,
+        "text": "[translate 'Pressure (bar)']",
+        "font": "Helv_7_bold",
+        "fill": "pressurelinecolor",
+        "anchor": "ne"
+      },
+      {
+        "pages": ["off_zoomed_temperature", "espresso_zoomed_temperature", "espresso_3_zoomed_temperature"],
+        "x": 40,
+        "y": 30,
+        "text": "[translate 'Temperature ([return_html_temperature_units])']",
+        "font": "Helv_7_bold",
+        "fill": "temperature_label_color",
+        "anchor": "nw"
+      },
+      {
+        "pages": ["off", "espresso", "espresso_3"],
+        "x": 40,
+        "y": 220,
+        "text": "[translate 'Pressure (bar)']",
+        "font": "Helv_7_bold",
+        "fill": "pressurelinecolor",
+        "anchor": "nw"
+      },
+      {
+        "pages": ["off", "espresso", "espresso_3"],
+        "x": 40,
+        "y": 677,
+        "text": "[translate 'Flow (mL/s)']",
+        "font": "Helv_7_bold",
+        "fill": "flow_label_color",
+        "anchor": "nw"
+      },
+      {
+        "pages": ["off", "espresso", "espresso_3"],
+        "x": 40,
+        "y": 1128,
+        "text": "[translate 'Temperature ([return_html_temperature_units])']",
+        "font": "Helv_7_bold",
+        "fill": "temperature_label_color",
+        "anchor": "nw"
+      }
+    ],
+    "data_card_column_headers": [
+      {
+        "pages": "all espresso pages",
+        "x": 2060,
+        "y": "pos_top = 720",
+        "text": "[translate 'Time']",
+        "font": "Helv_7_bold",
+        "fill": "dark",
+        "anchor": "nw"
+      },
+      {
+        "pages": "all espresso pages",
+        "x": 2512,
+        "y": "pos_top = 720",
+        "text": "[translate 'Volume']",
+        "font": "Helv_7_bold",
+        "fill": "dark",
+        "anchor": "ne"
+      }
+    ]
+  },
+
+  "graphs": {
+    "pressure_3chart_view": {
+      "pages": ["off", "espresso", "espresso_1", "espresso_2", "espresso_3"],
+      "position": [20, 267],
+      "width": 1990,
+      "height": 406,
+      "plot_background": "chart_background",
+      "x_axis": {
+        "variable": "espresso_elapsed",
+        "color": "pressurelinecolor",
+        "tickfont": "Helv_6",
+        "linewidth": 2
+      },
+      "y_axis": {
+        "color": "pressurelinecolor",
+        "tickfont": "Helv_6",
+        "min": 0.0,
+        "max": "$::de1(max_pressure) + 0.01",
+        "typical_max": 11,
+        "subdivisions": 5,
+        "major_ticks": [1, 3, 5, 7, 9, 11]
+      },
+      "elements": {
+        "line_espresso_pressure": "solid line, linewidth 10",
+        "line_espresso_pressure_goal": "dashed line, linewidth 8",
+        "god_line_espresso_pressure": "thick solid line, linewidth 20 (reference shot)"
+      },
+      "interact": "Click to zoom to off_zoomed/espresso_zoomed/espresso_3_zoomed"
+    },
+
+    "flow_3chart_view": {
+      "pages": ["off", "espresso", "espresso_1", "espresso_2", "espresso_3"],
+      "position": [20, 723],
+      "width": 1990,
+      "height": 410,
+      "plot_background": "chart_background",
+      "x_axis": {
+        "variable": "espresso_elapsed",
+        "color": "flow_line_color",
+        "tickfont": "Helv_6"
+      },
+      "y_axis": {
+        "color": "flow_line_color",
+        "tickfont": "Helv_6",
+        "min": 0.0,
+        "max": 8.01,
+        "subdivisions": 2,
+        "major_ticks": [1, 2, 3, 4, 5, 6, 7, 8]
+      },
+      "elements": {
+        "line_espresso_flow": "solid line, linewidth 12",
+        "line_espresso_flow_goal": "dashed line, linewidth 8",
+        "god_line_espresso_flow": "thick solid line, linewidth 24 (reference shot)",
+        "line_espresso_flow_weight": "optional if scale connected, linewidth 6",
+        "line_espresso_weight": "optional if scale connected and chart_total_shot_weight=2"
+      },
+      "interact": "Click to zoom"
+    },
+
+    "temperature_3chart_view": {
+      "pages": ["off", "espresso", "espresso_1", "espresso_2", "espresso_3"],
+      "position": [20, 1174],
+      "width": 1990,
+      "height": 410,
+      "plot_background": "chart_background",
+      "x_axis": {
+        "variable": "espresso_elapsed",
+        "color": "temperature_label_color",
+        "tickfont": "Helv_6"
+      },
+      "y_axis": {
+        "color": "temperature_label_color",
+        "tickfont": "Helv_6",
+        "subdivisions": 5,
+        "note": "Min/max set dynamically via update_temperature_charts_y_axis(). Depends on profile settings and espresso_temperature."
+      },
+      "elements": {
+        "line_espresso_temperature_basket": "solid line, linewidth 12",
+        "line_espresso_temperature_goal": "dashed line, linewidth 8",
+        "god_line_espresso_temperature_basket": "thick solid line (reference)"
+      },
+      "interact": "Click to zoom to temperature-only view"
+    },
+
+    "combined_zoomed_view": {
+      "pages": ["off_zoomed", "espresso_zoomed", "espresso_3_zoomed"],
+      "position": [20, 78],
+      "width": 1990,
+      "height": 1510,
+      "plot_background": "chart_background",
+      "x_axis": {
+        "variable": "espresso_elapsed",
+        "color": "lighter",
+        "tickfont": "Helv_7_bold"
+      },
+      "y_axis": {
+        "color": "lighter",
+        "tickfont": "Helv_7_bold",
+        "min": 0.0,
+        "max": "$::settings(zoomed_y_axis_scale)",
+        "default_max": 12,
+        "range": [1, 15],
+        "subdivisions": 5,
+        "major_ticks": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+      },
+      "interaction": {
+        "left_side_click": {
+          "upper_half": "Increase Y-axis scale (zoom out on Y)",
+          "lower_half": "Decrease Y-axis scale (zoom in on Y)"
+        },
+        "right_side_click": "Unzoom (return to 3-chart view)",
+        "y_range": "1 to 15, each unit = 1 bar or 1 mL/s"
+      },
+      "elements": "Pressure (green), Flow (blue), Weight (brown), Resistance (yellow dashed)"
+    },
+
+    "temperature_zoomed_view": {
+      "pages": ["off_zoomed_temperature", "espresso_zoomed_temperature", "espresso_3_zoomed_temperature"],
+      "position": [20, 74],
+      "width": 1990,
+      "height": 1516,
+      "plot_background": "chart_background",
+      "x_axis": {
+        "variable": "espresso_elapsed",
+        "color": "temperature_label_color",
+        "tickfont": "Helv_6"
+      },
+      "y_axis": {
+        "color": "temperature_label_color",
+        "tickfont": "Helv_6",
+        "subdivisions": 5
+      },
+      "interact": "Click to unzoom to 3-chart view"
+    },
+
+    "x_axis_time_behavior": {
+      "description": "The X-axis represents espresso_elapsed (seconds since shot start).",
+      "mechanism": "In Tcl BLT, the x-axis -max drives the horizontal range. This is updated dynamically as the shot progresses.",
+      "effect": "Creates scrolling/expanding graph as new data arrives from the machine.",
+      "implementation_note": "Exact update mechanism is in de1plus core (not skin.tcl). Look for traces on espresso_elapsed or polling loops that call: $widget axis configure x -max $::de1(espresso_elapsed)",
+      "zoomed_vs_nonzoomed": "Zoomed view expands to show full shot history; non-zoomed may show fixed window or last N seconds."
+    }
+  },
+
+  "optional_widgets": {
+    "water_level_scale": {
+      "condition": "$::settings(waterlevel_indicator_on) == 1",
+      "pages": ["off", "off_zoomed", "espresso", "espresso_zoomed", "espresso_3", "espresso_3_zoomed", "off_zoomed_temperature", "espresso_zoomed_temperature", "espresso_3_zoomed_temperature"],
+      "position": [2546, 190],
+      "type": "Tk scale (vertical slider)",
+      "width": 16,
+      "height": 496,
+      "variable": "$::de1(water_level)",
+      "state": "disabled (read-only indicator)",
+      "range": "from $::settings(water_level_sensor_max) to 10",
+      "troughcolor": "water_level_widget_background_espresso",
+      "sliderlength": 50,
+      "description": "Visual indicator of water tank level. Not interactive."
+    },
+
+    "weight_progress_bar": {
+      "condition": "$::settings(scale_bluetooth_address) != ''",
+      "pages": [
+        ["off", "off_zoomed", "espresso_3", "espresso_3_zoomed", "off_zoomed_temperature", "espresso_3_zoomed_temperature"],
+        ["espresso", "espresso_zoomed", "espresso_zoomed_temperature"]
+      ],
+      "type": "ProgressBar (bwidget)",
+      "position_variant": [
+        {
+          "pages": ["off", "off_zoomed", "espresso_3", "espresso_3_zoomed", "off_zoomed_temperature", "espresso_3_zoomed_temperature"],
+          "position": [2060, 1310],
+          "width": 420,
+          "height": 2,
+          "description": "Weight activity/flow indicator"
+        },
+        {
+          "pages": ["espresso", "espresso_zoomed", "espresso_zoomed_temperature"],
+          "position": [2390, "pos_top + 12.3*spacer = 1187"],
+          "width": 108,
+          "height": 16,
+          "condition": "$::settings(insight_skin_show_weight_activity_bar) == 1",
+          "description": "Weight activity bar (optional)"
+        }
+      ],
+      "variable": "$::de1(scale_weight_rate)",
+      "maximum": 6,
+      "foreground": "#a2693d (brown)",
+      "background": "chart_background"
+    }
+  },
+
+  "summary": {
+    "espresso_off_state": "Shows 3 large charts (pressure, flow, temperature). Right side data card shows time/volume, temp, profile. Green START button.",
+    "espresso_pouring": "Shows same layout. Right side updates with real-time flow, pressure, temp. Red STOP button. [skip] text for profile steps.",
+    "espresso_done": "Shows result. RESTART button. DYE/describe button for shot review.",
+    "zoomed_pressure_flow": "Single large combined pressure+flow chart. Interactive Y-axis zoom. Click-to-return unzoom.",
+    "zoomed_temperature": "Full-screen temperature chart only.",
+    "key_interactions": [
+      "Tap any non-zoomed chart to zoom",
+      "Tap LEFT side of zoomed chart to adjust Y-axis scale",
+      "Tap RIGHT side of zoomed chart to unzoom",
+      "Tap profile name to edit profile",
+      "Tap temperature area to adjust target",
+      "Tap [skip] to skip to next profile step",
+      "Top nav tabs switch between modes (flush, espresso, steam, water)",
+      "Bottom right: Settings menu and Sleep button"
+    ]
+  }
+}
