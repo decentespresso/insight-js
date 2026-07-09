@@ -148,21 +148,60 @@ html, body { margin: 0; background: #000; color: var(--ins-ink); overflow: hidde
   font-size: 3.4vw; color: #f8f8f8; pointer-events: none; white-space: nowrap;
   text-shadow: 2px 2px 0 #444, -2px -2px 0 #ccc; transition: left .8s ease, top .8s ease; }
 
+/* ---- Maintenance layer (descale-prep / descaling / cleaning) ---- */
+/* Its own top-level layer so it can stack above the Settings overlay. Reuses the
+   .s2page canvas (2560x1600, CSS-scaled). */
+#maint { position: absolute; inset: 0; z-index: 30; background: #f2f0f0; overflow: hidden; display: none; }
+
 /* ---- Image-backed settings stage (same 2560x1600 model as the brew pages) ---- */
 .s2stage { width: min(100%, calc(100vh * 2560 / 1600)); aspect-ratio: 2560 / 1600; margin: 0 auto;
   background: #dfe1ee; position: relative; overflow: hidden; }
 .s2page { position: absolute; left: 0; top: 0; width: 2560px; height: 1600px; transform-origin: top left;
   background-repeat: no-repeat; background-position: 0 0; background-size: 2560px 1600px; }
-/* profile list injected over the settings_1 left card (2560-space px, scales with the page) */
-.s2-preset-scroll { position: absolute; left: 40px; top: 310px; width: 1000px; height: 740px; overflow-y: auto;
-  font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
+/* profile list injected over the settings_1 left card (2560-space px, scales with
+   the page); fills the card from under the title to the bottom edge (~1360). */
+.s2-preset-scroll { position: absolute; left: 40px; top: 300px; width: 1040px; height: 1055px; overflow-y: auto;
+  background: #fbfaff; border-radius: 8px; padding: 6px 8px; font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
 .s2-preset-row { display: block; width: 100%; text-align: left; border: none; background: transparent;
-  padding: 16px 20px; font-size: 40px; color: #2d3046; cursor: pointer; border-radius: 10px; font-family: inherit; }
+  padding: 8px 20px; font-size: 40px; color: #2d3046; cursor: pointer; border-radius: 10px; font-family: inherit; }
 .s2-preset-row:hover { background: #f0f1fa; }
 .s2-preset-row.sel { background: #c7cbe4; }
+.s2-preset-row.sub { padding-left: 60px; }                 /* bulleted sub-item under a category */
+.s2-preset-cat { padding: 9px 20px 2px; font-size: 40px; font-weight: 700; color: #42465c; }  /* category header (A-Flow / D-Flow) */
+/* eyeball "show all" mode: a big finger checkbox + name per profile */
+.s2-preset-check { display: flex; align-items: center; gap: 28px; width: 100%; padding: 7px 20px; cursor: pointer; border-radius: 10px; }
+.s2-preset-check:hover { background: #f0f1fa; }
+.s2-preset-check input[type=checkbox] { width: 60px; height: 60px; accent-color: #4979e9; flex: 0 0 auto; }
+.s2-check-name { font-size: 40px; color: #2d3046; }
+/* Scrollbars (Insight look): a light near-white thumb (#f7f5ff) that fills most of
+   the width as a rounded pill, on a darker lavender gutter (#d5d9e8), with a soft
+   drop shadow — same style as the flush/steam flow-slider handle. */
+.s2-preset-scroll::-webkit-scrollbar { width: 195px; }
+.s2-preset-scroll::-webkit-scrollbar-track { background: transparent; }
+.s2-preset-scroll::-webkit-scrollbar-thumb { background: #f7f5ff; border-radius: 50px; border: 16px solid transparent;
+  background-clip: padding-box; min-height: 160px; box-shadow: inset 0 0 0 3px #b4b6cb; }
+/* injected "Pick a new name to save" text field (bottom-right card) */
+.s2-name-input { position: absolute; left: 1360px; top: 1303px; width: 880px; height: 90px; box-sizing: border-box;
+  border: 2px solid #d8d8e4; border-radius: 12px; background: #fbfaff; color: #4979e9; padding: 8px 18px;
+  font-family: 'InsightUI', Helvetica, Arial, sans-serif; font-size: 42px; }
+.s2-name-input:focus { outline: none; border-color: #4979e9; }
+/* scrollable description box (finger scrollbar appears when it overflows) */
+.ovar-scroll::-webkit-scrollbar { width: 195px; }
+.ovar-scroll::-webkit-scrollbar-track { background: transparent; }
+.ovar-scroll::-webkit-scrollbar-thumb { background: #f7f5ff; border-radius: 50px; border: 16px solid transparent; background-clip: padding-box; min-height: 140px; box-shadow: inset 0 0 0 3px #b4b6cb; }
 /* dialog content injected into the white panel of settings_message.png (2560-space) */
 .s2-dialog-content { position: absolute; left: 320px; top: 480px; width: 1920px; height: 690px; overflow-y: auto;
   padding: 0 40px; font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
+
+/* ---- Finger-friendly scrollbars ---- */
+/* This skin runs on the DE1's touchscreen, so scroll thumbs must be wide enough
+   to grab with a finger. Authored in 2560-space (scaled with #page). NOTE: do not
+   set the standard `scrollbar-width` here — in Chromium it overrides and disables
+   the ::-webkit-scrollbar width below. */
+.s2-dialog-content::-webkit-scrollbar, .adv-sliders::-webkit-scrollbar { width: 130px; }
+.s2-dialog-content::-webkit-scrollbar-track, .adv-sliders::-webkit-scrollbar-track { background: transparent; }
+.s2-dialog-content::-webkit-scrollbar-thumb, .adv-sliders::-webkit-scrollbar-thumb {
+  background: #f7f5ff; border-radius: 50px; border: 14px solid transparent; background-clip: padding-box; min-height: 160px; box-shadow: inset 0 0 0 3px #b4b6cb; }
 /* legacy sub-panel (kept for safety; no longer used) */
 .s2-subpanel { position: absolute; left: 30px; top: 210px; right: 30px; bottom: 60px; background: #fff;
   border-radius: 20px; padding: 40px 48px; overflow-y: auto; box-shadow: 0 6px 30px rgba(40,45,70,.15);
@@ -179,6 +218,33 @@ html, body { margin: 0; background: #000; color: var(--ins-ink); overflow: hidde
 .s2-sp-btn { border: none; background: #4979e9; color: #fff; font-weight: 700; font-size: 34px;
   padding: 20px 40px; border-radius: 40px; cursor: pointer; margin: 12px 12px 0 0; font-family: inherit; }
 .s2-sp-btn.grey { background: #c7cbe4; color: #3d4468; }
+
+/* Calibrate — columnar table (Measurement | Value | Adjust) */
+.s2-cal { display: table; width: 100%; margin: 10px 0 24px; border-collapse: collapse; }
+.s2-cal-row { display: grid; grid-template-columns: 1fr 260px 200px; align-items: center; gap: 16px;
+  padding: 16px 14px; border-bottom: 1px solid #e3e5f1; }
+.s2-cal-row.s2-cal-h { border-bottom: 2px solid #c7cbe4; font-weight: 700; color: #385a92; }
+.s2-cal-cell { font-size: 36px; color: #2d3046; }
+.s2-cal-cell.num { text-align: right; }
+.s2-cal-input { width: 220px; font-size: 34px; padding: 8px 12px; border-radius: 10px; border: 1px solid #c7cbe4;
+  text-align: right; font-family: inherit; }
+.s2-cal-stepper { display: flex; gap: 8px; justify-content: flex-end; }
+.s2-cal-step { width: 74px; height: 74px; border: none; border-radius: 14px; background: #c7cbe4; color: #3d4468;
+  font-size: 44px; line-height: 1; cursor: pointer; font-family: inherit; }
+.s2-cal-step:hover { background: #b4b9dc; }
+
+/* Advanced editor — per-step interactive sliders injected over settings_2a/2b's
+   three lower cards (2560-space, scales with the page). */
+.adv-sliders { position: absolute; left: 60px; top: 760px; width: 2440px; height: 600px;
+  display: flex; flex-direction: column; gap: 12px; overflow-y: auto; padding-right: 12px;
+  font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
+.adv-srow { display: grid; grid-template-columns: 480px 1fr 1fr; align-items: center; gap: 30px;
+  background: rgba(255, 255, 255, 0.72); border: 1px solid #e3e5f1; border-radius: 16px; padding: 16px 28px; }
+.adv-slabel { font-size: 40px; color: #42465c; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adv-scol { display: flex; align-items: center; gap: 18px; }
+.adv-scap { font-size: 30px; color: #7e8496; min-width: 160px; }
+.adv-range { flex: 1; accent-color: #4979e9; height: 16px; }
+.adv-sval { font-size: 36px; color: #4979e9; min-width: 190px; text-align: right; }
 
 /* ---- (legacy) flat-card settings styles, still used by other overlays ---- */
 .s2 { display: flex; flex-direction: column; height: 100%; background: #eceef7; color: #2d3046; position: relative;
@@ -237,9 +303,18 @@ html, body { margin: 0; background: #000; color: var(--ins-ink); overflow: hidde
 .s2-split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .s2-preset-list { display: flex; flex-direction: column; gap: 2px; max-height: 62vh; overflow-y: auto; background: #fff; border-radius: 12px; padding: 8px; }
 .s2-preset-side { background: #fff; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-.s2-toast { position: absolute; bottom: 78px; left: 50%; transform: translateX(-50%) translateY(10px); background: #2d3046; color: #fff;
-  padding: 10px 20px; border-radius: 10px; font-size: 15px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; }
+.s2-toast { position: absolute; bottom: 160px; left: 50%; transform: translateX(-50%) translateY(10px); background: #2d3046; color: #fff;
+  padding: 28px 56px; border-radius: 18px; font-size: 42px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; }
 .s2-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---- Image-backed DYE (describe_espresso) injected text fields (2560-space) ---- */
+/* the layer spans the page but must not intercept taps meant for the tap-zones
+   beneath it; only the actual inputs are interactive. */
+.dye-fields { position: absolute; inset: 0; pointer-events: none; }
+.dye-input { pointer-events: auto; border: 2px solid #d8d8e4; border-radius: 10px; background: #fbfaff; color: #4e85f4;
+  font-family: 'InsightUI', Helvetica, Arial, sans-serif; font-size: 40px; padding: 8px 16px; box-sizing: border-box; }
+.dye-input:focus { outline: none; border-color: #4e85f4; }
+textarea.dye-input { resize: none; line-height: 1.3; }
 
 /* ---- Overlay + profile picker ---- */
 #overlay { position: absolute; inset: 0; background: #fff; z-index: 20; display: none; flex-direction: column; }

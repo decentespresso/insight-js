@@ -2,6 +2,7 @@
 // Consumed by PageHost. Elements: tap-zone buttons, live-text variables (bound
 // to the `live` object), and the graph mount. Backgrounds & coordinates come
 // straight from the extracted INSIGHT coordinate map.
+import { t } from '../modules/i18n.js';
 const IMG = 'assets/insight/';
 const F = { data: 44, label: 34, button: 80, sub: 42, prof: 40, step: 30 };
 const C = { data: '#42465c', lighter: '#969eb1', dark: '#5a5d75', button: '#2d3046' };
@@ -14,6 +15,11 @@ const ZCARD = ['off_zoomed', 'espresso_zoomed', 'espresso_3_zoomed', 'off_zoomed
 const ZOFF = ['off_zoomed', 'espresso_3_zoomed', 'off_zoomed_temperature', 'espresso_3_zoomed_temperature'];
 const CARDALL = [...ALL, ...ZCARD];
 const CARDOFF = [...OFFISH, ...ZOFF];
+// Running (espresso-in-progress) pages — their data card is richer (live Flow +
+// Current step + [skip]) than the ready/done card, matching the Tcl Insight card.
+const ERUN = ['espresso', 'espresso_zoomed', 'espresso_zoomed_temperature'];
+// Card geometry from the Tcl (skin.tcl): pos_top 720, spacer 38, col1 2060, col3 2512.
+const PT = 720, SP = 38, cy = (m) => PT + m * SP;
 
 const wrap = (s, n, i) => { s = String(s || ''); const words = s.split(' '); const lines = ['', '']; let li = 0;
   for (const w of words) { if ((lines[li] + ' ' + w).trim().length > n && li < 1) li++; lines[li] = (lines[li] + ' ' + w).trim(); }
@@ -43,8 +49,7 @@ export const espressoConfig = {
     // ---- card / utility ----
     { kind: 'button', pages: OFFISH, rect: [2040, 1072, 2400, 1180], action: 'profileSelect' },
     { kind: 'button', pages: OFFISH, rect: [2040, 720, 2560, 1070], action: 'editProfile' },
-    { kind: 'button', pages: OFFISH, rect: [2420, 1200, 2560, 1400], action: 'describe' },
-    { kind: 'button', pages: ['espresso'], rect: [2020, 1204, 2560, 1600], action: 'skipStep' },
+    { kind: 'button', pages: ERUN, rect: [2020, 1204, 2560, 1600], action: 'skipStep' },
 
     // ---- graph (3 stacked panels) ----
     { kind: 'graph', id: 'espresso_chart', pages: ALL, rect: [20, 267, 2010, 1584] },
@@ -62,39 +67,49 @@ export const espressoConfig = {
     { kind: 'button', pages: ['espresso_zoomed', 'espresso_zoomed_temperature'], rect: [2020, 240, 2560, 1200], action: 'stopEspresso' },
     { kind: 'button', pages: ['off_zoomed', 'espresso_zoomed', 'espresso_3_zoomed', 'off_zoomed_temperature', 'espresso_zoomed_temperature', 'espresso_3_zoomed_temperature'], rect: [2020, 0, 2550, 180], action: 'navSteam' },
     // "STEAM" next-mode hint shown top-right on the zoomed views (icon is baked in)
-    row(['off_zoomed', 'espresso_zoomed', 'espresso_3_zoomed', 'off_zoomed_temperature', 'espresso_zoomed_temperature', 'espresso_3_zoomed_temperature'], 2360, 90, 'center', C.lighter, () => 'STEAM', { size: F.sub }),
-    { kind: 'var', pages: ['off_zoomed', 'off_zoomed_temperature'], x: 2290, y: 390, anchor: 'center', size: F.button, weight: 'bold', fill: C.button, bind: () => 'START' },
-    { kind: 'var', pages: ['espresso_zoomed', 'espresso_zoomed_temperature'], x: 2290, y: 390, anchor: 'center', size: F.button, weight: 'bold', fill: C.button, bind: () => 'STOP' },
-    { kind: 'var', pages: ['espresso_3_zoomed', 'espresso_3_zoomed_temperature'], x: 2290, y: 390, anchor: 'center', size: F.button, weight: 'bold', fill: C.button, bind: () => 'RESTART' },
+    row(['off_zoomed', 'espresso_zoomed', 'espresso_3_zoomed', 'off_zoomed_temperature', 'espresso_zoomed_temperature', 'espresso_3_zoomed_temperature'], 2360, 90, 'center', C.lighter, () => t('Steam').toUpperCase(), { size: F.sub }),
+    { kind: 'var', pages: ['off_zoomed', 'off_zoomed_temperature'], x: 2290, y: 390, anchor: 'center', size: F.button, weight: 'bold', fill: C.button, bind: () => t('START') },
+    { kind: 'var', pages: ['espresso_zoomed', 'espresso_zoomed_temperature'], x: 2290, y: 390, anchor: 'center', size: F.button, weight: 'bold', fill: C.button, bind: () => t('STOP') },
+    { kind: 'var', pages: ['espresso_3_zoomed', 'espresso_3_zoomed_temperature'], x: 2290, y: 390, anchor: 'center', size: F.button, weight: 'bold', fill: C.button, bind: () => t('RESTART') },
 
     // ---- big round button (state text + ESPRESSO label + substate line) ----
-    row(['off'], 2290, 390, 'center', C.button, () => 'START', { size: F.button, weight: 'bold' }),
-    row(['espresso'], 2290, 390, 'center', C.button, () => 'STOP', { size: F.button, weight: 'bold' }),
-    row(['espresso_3'], 2290, 390, 'center', C.button, () => 'RESTART', { size: F.button, weight: 'bold' }),
-    row(CARDALL, 2295, 462, 'center', C.lighter, () => 'ESPRESSO', { size: F.sub }),
-    row(CARDALL, 2295, 520, 'center', C.lighter, (l) => l.substate || 'ready', { size: F.sub }),
+    row(['off'], 2290, 390, 'center', C.button, () => t('START'), { size: F.button, weight: 'bold' }),
+    row(['espresso'], 2290, 390, 'center', C.button, () => t('STOP'), { size: F.button, weight: 'bold' }),
+    row(['espresso_3'], 2290, 390, 'center', C.button, () => t('RESTART'), { size: F.button, weight: 'bold' }),
+    row(CARDALL, 2295, 462, 'center', C.lighter, () => t('Espresso').toUpperCase(), { size: F.sub }),
+    row(CARDALL, 2295, 520, 'center', C.lighter, (l) => l.substate || t('ready'), { size: F.sub }),
 
-    // ---- data card: Time / Volume columns (pos_top 720, spacer 38) ----
-    row(CARDALL, 2060, 720, 'nw', C.dark, () => 'Time', { weight: 'bold' }),
-    row(CARDALL, 2512, 720, 'ne', C.dark, () => 'Volume', { weight: 'bold' }),
-    row(CARDALL, 2060, 758, 'nw', C.lighter, (l) => `${sec(l.preinfElapsed)}s preinfusion`),
-    row(CARDALL, 2512, 758, 'ne', C.lighter, (l) => `${vol(l.preinfVolume)} mL`),
-    row(CARDALL, 2060, 796, 'nw', C.lighter, (l) => `${sec(l.pourElapsed)}s pouring${l.targetVolume > 0 ? ` < ${vol(l.targetVolume)} mL` : ''}`),
-    row(CARDALL, 2512, 796, 'ne', C.lighter, (l) => `${vol(l.pourVolumeOnly)} mL`),
-    row(CARDALL, 2060, 834, 'nw', C.lighter, (l) => `${sec(l.elapsed)}s total`),
-    row(CARDALL, 2512, 834, 'ne', C.lighter, (l) => `${vol(l.totalVolume)} mL`),
-    row(CARDOFF, 2060, 872, 'nw', C.lighter, (l) => `${sec(l.doneElapsed)}s done`),
+    // ---- data card: Time / Volume columns (shared, pos_top 720, spacer 38) ----
+    row(CARDALL, 2060, cy(0), 'nw', C.dark, () => t('Time'), { weight: 'bold' }),
+    row(CARDALL, 2512, cy(0), 'ne', C.dark, () => t('Volume'), { weight: 'bold' }),
+    row(CARDALL, 2060, cy(1), 'nw', C.lighter, (l) => `${sec(l.preinfElapsed)}s ${t('preinfusion')}`),
+    row(CARDALL, 2512, cy(1), 'ne', C.lighter, (l) => `${vol(l.preinfVolume)} mL`),
+    row(CARDALL, 2060, cy(2), 'nw', C.lighter, (l) => `${sec(l.pourElapsed)}s ${t('pouring')}${l.targetVolume > 0 ? ` < ${vol(l.targetVolume)} mL` : ''}`),
+    row(CARDALL, 2512, cy(2), 'ne', C.lighter, (l) => `${vol(l.pourVolumeOnly)} mL`),
+    row(CARDALL, 2060, cy(3), 'nw', C.lighter, (l) => `${sec(l.elapsed)}s ${t('total')}`),
+    row(CARDALL, 2512, cy(3), 'ne', C.lighter, (l) => `${vol(l.totalVolume)} mL`),
+    row(CARDOFF, 2060, cy(4), 'nw', C.lighter, (l) => `${sec(l.doneElapsed)}s ${t('done')}`),
 
-    // ---- data card: Temperature block ----
-    row(CARDALL, 2060, 948, 'nw', C.dark, () => 'Temperature', { weight: 'bold' }),
-    row(CARDALL, 2060, 986, 'nw', C.lighter, (l) => `${n1(l.targetTemp)}°C goal`),
-    row(['espresso'], 2060, 1024, 'nw', C.lighter, (l) => `${n1(l.coffeeTemp)}°C coffee`),
-    row(['espresso'], 2060, 1062, 'nw', C.lighter, (l) => `${n1(l.metalTemp)}°C metal`),
-    row(CARDOFF, 2060, 1024, 'nw', C.lighter, (l) => `${n1(l.metalTemp)}°C metal`),
+    // ---- READY / DONE card (off / espresso_3): Temperature goal/metal + profile ----
+    row(CARDOFF, 2060, 948, 'nw', C.dark, () => t('Temperature'), { weight: 'bold' }),
+    row(CARDOFF, 2060, 986, 'nw', C.lighter, (l) => `${n1(l.targetTemp)}°C ${t('goal')}`),
+    row(CARDOFF, 2060, 1024, 'nw', C.lighter, (l) => `${n1(l.metalTemp)}°C ${t('metal')}`),
+    row(CARDOFF, 2060, 1080, 'nw', C.dark, (l) => t(l.profileType || 'Profile'), { weight: 'bold' }),
+    row(CARDOFF, 2060, 1118, 'nw', C.lighter, (l) => wrap(l.profileTitle, 29, 0)),
+    row(CARDOFF, 2060, 1156, 'nw', C.lighter, (l) => wrap(l.profileTitle, 29, 1)),
 
-    // ---- data card: Profile type + name ----
-    row(CARDALL, 2060, 1080, 'nw', C.dark, (l) => l.profileType || 'Profile', { weight: 'bold' }),
-    row(CARDALL, 2060, 1118, 'nw', C.lighter, (l) => wrap(l.profileTitle, 29, 0)),
-    row(CARDALL, 2060, 1156, 'nw', C.lighter, (l) => wrap(l.profileTitle, 29, 1)),
+    // ---- RUNNING card (espresso): Temperature goal/coffee + Flow + profile + Current step ----
+    row(ERUN, 2060, cy(4.5), 'nw', C.dark, () => t('Temperature'), { weight: 'bold' }),
+    row(ERUN, 2060, cy(5.5), 'nw', C.lighter, (l) => `${n1(l.targetTemp)}°C ${t('goal')}`),
+    row(ERUN, 2060, cy(6.5), 'nw', C.lighter, (l) => `${n1(l.coffeeTemp)}°C ${t('coffee')}`),
+    row(ERUN, 2060, cy(8), 'nw', C.dark, () => t('Flow'), { weight: 'bold' }),
+    row(ERUN, 2060, cy(9), 'nw', C.lighter, (l) => `${n1(l.flow)} mL/s`),
+    row(ERUN, 2060, cy(10), 'nw', C.lighter, (l) => `${n1(l.pressure)} bar`),
+    row(ERUN, 2060, cy(11.5), 'nw', C.dark, (l) => t(l.profileType || 'Profile'), { weight: 'bold' }),
+    row(ERUN, 2060, cy(12.5), 'nw', C.lighter, (l) => wrap(l.profileTitle, 29, 0)),
+    row(ERUN, 2060, cy(13.5), 'nw', C.lighter, (l) => wrap(l.profileTitle, 29, 1)),
+    row(ERUN, 2060, cy(15), 'nw', C.dark, () => t('Current step'), { weight: 'bold' }),
+    row(ERUN, 2060, cy(16), 'nw', '#8297be', (l) => l.currentStep || ''),
+    row(ERUN, 2512, cy(16), 'ne', '#8297be', () => `[${t('skip')}]`),
   ],
 };

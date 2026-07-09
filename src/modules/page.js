@@ -7,6 +7,20 @@ import { logger } from './logger.js';
 
 export const BASE_W = 2560, BASE_H = 1600;
 
+// --- Insight Dark theme -------------------------------------------------------
+// The dark theme swaps in the "Insight Dark" background image set (assets/
+// insight-dark/) for pages that have a dark variant, and remaps the light-theme
+// overlay text colours (dark ink on light cards) to light ink for the dark cards.
+// Colours are keyed by the exact hex values the page configs use, so no config
+// needs to know about theming — PageHost repaints when a dark page is shown.
+export const curTheme = () => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+const DARK_INK = {
+  '#42465c': '#d6d9e4', '#2d3046': '#eceef6', '#5a5d75': '#c2c6d4', '#646a7c': '#c8ccda',
+  '#4c4f5c': '#c8ccda', '#969eb1': '#8b93a6', '#7e8496': '#9aa2b5', '#9aa0b0': '#b6bcca',
+  '#4979e9': '#6c9bff', '#5a5d75dd': '#c2c6d4', '#3d4468': '#c8ccda', '#b06a6a': '#e08d8d',
+};
+const paintDark = (hex) => DARK_INK[(hex || '').toLowerCase()] || hex;
+
 // Tk anchor -> CSS transform (which corner of the box sits on x,y)
 const ANCHOR = {
   nw: '0,0', n: '-50%,0', ne: '-100%,0',
@@ -61,6 +75,10 @@ export class PageHost {
           letterSpacing: el.spacing ? el.spacing + 'px' : '',
           whiteSpace: el.wrap ? 'normal' : '', lineHeight: el.wrap ? '1.3' : '',
         });
+        // clamp to N lines inside its box (used by the preset Description)
+        if (el.clamp) Object.assign(node.style, { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: String(el.clamp), overflow: 'hidden' });
+        // fixed-height scrollable text box (scrollbar appears when it overflows)
+        if (el.scroll) { Object.assign(node.style, { height: el.scroll + 'px', overflowY: 'auto', overflowX: 'hidden', pointerEvents: 'auto' }); node.classList.add('ovar-scroll'); }
         if (el.text != null) node.textContent = el.text;
       } else if (el.kind === 'box') {
         // simple styled rectangle (e.g. the steam "Enabled" toggle pill/knob)
@@ -119,10 +137,16 @@ export class PageHost {
     if (!this.config.pages[pageId]) { logger.warn('unknown page', pageId); return; }
     this.current = pageId;
     const img = this.config.pages[pageId].replace(/\.(png|jpe?g)$/i, '.avif');
-    this.page.style.backgroundImage = `url("${this.config.imgBase}${img}")`;
+    // Dark theme: use the dark image set + dark ink for pages that have a dark
+    // variant (config.darkImages). Pages without one (e.g. settings) stay light.
+    const stem = img.replace(/\.avif$/i, '');
+    this._dark = curTheme() === 'dark' && this.config.darkBase && this.config.darkImages && this.config.darkImages.has(stem);
+    const base = this._dark ? this.config.darkBase : this.config.imgBase;
+    this.page.style.backgroundImage = `url("${base}${img}")`;
     for (const { el, node } of this.nodes) {
       const on = (el.pages.includes(pageId) || el.pages.includes('*')) && !(el.notPages && el.notPages.includes(pageId));
-      node.style.display = on ? (el.kind === 'button' ? 'block' : (el.kind === 'graph' ? 'block' : 'block')) : 'none';
+      // clamped text needs display:-webkit-box (for -webkit-line-clamp); everything else is block
+      node.style.display = on ? (el.clamp ? '-webkit-box' : 'block') : 'none';
       if (on && el.kind === 'graph' && !el._mounted && this._graphMount && this._graphMount[el.id]) {
         this.graphs[el.id] = this._graphMount[el.id](node);
         el._mounted = true;
@@ -138,8 +162,11 @@ export class PageHost {
       if (el.kind === 'var' && el.bind) {
         try { node.textContent = el.bind(this.live) ?? ''; } catch (e) { /* ignore */ }
       }
-      if (el.kind === 'var' && el.fillBind) {
-        try { node.style.color = el.fillBind(this.live) || el.fill || '#000'; } catch (e) { /* ignore */ }
+      if (el.kind === 'var') {
+        // resolve the colour (dynamic fillBind wins) then remap for the dark theme
+        let c = el.fill || '#000';
+        if (el.fillBind) { try { c = el.fillBind(this.live) || el.fill || '#000'; } catch (e) { /* ignore */ } }
+        node.style.color = this._dark ? paintDark(c) : c;
       }
       if (el.kind === 'box' && el.bind) {
         try { const s = el.bind(this.live) || {}; if (s.bg) node.style.background = s.bg; if (s.left != null) node.style.left = s.left + 'px'; } catch (e) { /* ignore */ }

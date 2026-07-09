@@ -3,11 +3,12 @@
 // "Previous values" list, a keypad, and Cancel / Ok. Opened by tapping a value
 // label (flush auto-off, water volume/temp, steam auto-off).
 import { openOverlay, closeOverlay } from '../modules/overlay.js';
+import { t } from '../modules/i18n.js';
 
 const el = (tag, css, txt) => { const n = document.createElement(tag); if (css) n.style.cssText = css; if (txt != null) n.textContent = txt; return n; };
-const prevKey = (t) => `numpad_prev_${t}`;
-const loadPrev = (t) => { try { return JSON.parse(localStorage.getItem(prevKey(t)) || '[]'); } catch (e) { return []; } };
-const savePrev = (t, v) => { const l = loadPrev(t).filter((x) => x !== v); l.unshift(v); localStorage.setItem(prevKey(t), JSON.stringify(l.slice(0, 8))); };
+const prevKey = (k) => `numpad_prev_${k}`;
+const loadPrev = (k) => { try { return JSON.parse(localStorage.getItem(prevKey(k)) || '[]'); } catch (e) { return []; } };
+const savePrev = (k, v) => { const l = loadPrev(k).filter((x) => x !== v); l.unshift(v); localStorage.setItem(prevKey(k), JSON.stringify(l.slice(0, 8))); };
 
 // opts: { title, value, min, max, step, bigStep, decimals, unit, onOk(value) }
 export function openNumpad(opts) {
@@ -58,7 +59,7 @@ export function openNumpad(opts) {
 
   // ---- previous values ----
   const prevCard = el('div', 'flex:1;background:#fff;border-radius:10px;padding:22px;display:flex;flex-direction:column;min-height:0;');
-  prevCard.appendChild(el('div', 'text-align:center;color:#969eb1;font-size:24px;margin-bottom:24px;', 'Previous values'));
+  prevCard.appendChild(el('div', 'text-align:center;color:#969eb1;font-size:24px;margin-bottom:24px;', t('Previous values')));
   const prevList = el('div', 'flex:1;display:flex;flex-wrap:wrap;gap:10px;align-content:flex-start;overflow-y:auto;');
   for (const v of loadPrev(o.title)) {
     const p = el('button', 'padding:20px 42px;font-size:40px;min-width:120px;border:1px solid #dfe1ec;border-radius:8px;background:#f6f7fb;color:#42465c;cursor:pointer;', fmt(v));
@@ -95,8 +96,8 @@ export function openNumpad(opts) {
     b.addEventListener('click', fn);
     return b;
   };
-  footer.appendChild(foot('Cancel', false, () => closeOverlay()));
-  footer.appendChild(foot('Ok', true, () => submit(parseFloat(entry) || o.min)));
+  footer.appendChild(foot(t('Cancel'), false, () => closeOverlay()));
+  footer.appendChild(foot(t('Ok'), true, () => submit(parseFloat(entry) || o.min)));
   root.appendChild(footer);
 
   openOverlay(root);

@@ -5,8 +5,9 @@
 import * as api from '../modules/api.js';
 import { openOverlay, closeOverlay } from '../modules/overlay.js';
 import { logger } from '../modules/logger.js';
+import { t } from '../modules/i18n.js';
 
-const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; };
+const el = (tag, c, x) => { const n = document.createElement(tag); if (c) n.className = c; if (x != null) n.textContent = x; return n; };
 const num = (v) => (v == null ? '' : v);
 
 export async function openProfileEditor(onSaved) {
@@ -18,13 +19,13 @@ export async function openProfileEditor(onSaved) {
   const panel = el('div', 'settings-page');
   panel.innerHTML = `
     <header class="picker-head">
-      <button class="back-btn" id="pe-back">‹ Back</button>
+      <button class="back-btn" id="pe-back">‹ ${t('Back')}</button>
       <input class="pe-title" id="pe-title" value="${(profile.title || '').replace(/"/g, '&quot;')}">
-      <button class="save-btn" id="pe-save">Save</button>
+      <button class="save-btn" id="pe-save">${t('Save')}</button>
     </header>
     <div class="settings-body pe-body">
       <div class="pe-steps" id="pe-steps"></div>
-      <button class="pe-add" id="pe-add">+ Add step</button>
+      <button class="pe-add" id="pe-add">+ ${t('Add step')}</button>
       <div class="dye-status" id="pe-status"></div>
     </div>`;
   openOverlay(panel);
@@ -42,12 +43,12 @@ export async function openProfileEditor(onSaved) {
           <input class="pe-name" data-i="${i}" data-k="name" value="${(s.name || '').replace(/"/g, '&quot;')}">
           <button class="pe-del" data-i="${i}">✕</button></div>
         <div class="pe-step-grid">
-          <label>Pump<select data-i="${i}" data-k="pump">
-            <option value="pressure"${!isFlow ? ' selected' : ''}>pressure</option>
-            <option value="flow"${isFlow ? ' selected' : ''}>flow</option></select></label>
-          <label>${isFlow ? 'Flow (ml/s)' : 'Pressure (bar)'}<input type="number" step="0.1" data-i="${i}" data-k="${isFlow ? 'flow' : 'pressure'}" value="${num(isFlow ? s.flow : s.pressure)}"></label>
-          <label>Temp (°C)<input type="number" step="0.5" data-i="${i}" data-k="temperature" value="${num(s.temperature)}"></label>
-          <label>Seconds<input type="number" step="0.5" data-i="${i}" data-k="seconds" value="${num(s.seconds)}"></label>
+          <label>${t('Pump')}<select data-i="${i}" data-k="pump">
+            <option value="pressure"${!isFlow ? ' selected' : ''}>${t('pressure')}</option>
+            <option value="flow"${isFlow ? ' selected' : ''}>${t('flow')}</option></select></label>
+          <label>${isFlow ? t('Flow (ml/s)') : t('Pressure (bar)')}<input type="number" step="0.1" data-i="${i}" data-k="${isFlow ? 'flow' : 'pressure'}" value="${num(isFlow ? s.flow : s.pressure)}"></label>
+          <label>${t('Temp (°C)')}<input type="number" step="0.5" data-i="${i}" data-k="temperature" value="${num(s.temperature)}"></label>
+          <label>${t('Seconds')}<input type="number" step="0.5" data-i="${i}" data-k="seconds" value="${num(s.seconds)}"></label>
         </div>`;
       stepsEl.appendChild(row);
     });

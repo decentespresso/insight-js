@@ -3,8 +3,8 @@
 // zoomed view shows full history), and maps machine state -> page.
 import * as api from './api.js';
 import { logger, setDebug } from './logger.js';
-import { PageHost } from './page.js';
-import { EspressoChart, ZoomChart } from './chart.js';
+import { PageHost, curTheme } from './page.js';
+import { EspressoChart, ZoomChart, MiniChart } from './chart.js';
 import { config, families, stateToFamily } from '../config/index.js';
 import { openProfileSelector } from '../views/profile_selector.js';
 import { openDYE } from '../views/dye.js';
@@ -28,9 +28,14 @@ const live = { pageState: 'off', family: 'espresso', substate: '', pressure: 0, 
 // shared shot data buffer (all charts render from it)
 const buf = { t: [], p: [], pg: [], f: [], fg: [], w: [], T: [], Tg: [], r: [] };
 const resetBuf = () => { for (const k in buf) buf[k] = []; };
+// steam/water run buffer for the running-page mini graphs
+const runBuf = { t: [], temp: [], w: [] };
+const resetRunBuf = () => { runBuf.t = []; runBuf.temp = []; runBuf.w = []; };
+let runStart = null;
 
 // profile preview curve (target pressure/flow/temp step lines from profile steps)
 let preview = { t: [], p: [], f: [], T: [] };
+let currentSteps = [];                          // loaded profile steps (for the "Current step" label)
 // pour-phase tracking (preinfusion vs pouring split, like Insight)
 let poured = false, preinfEnd = 0, lastVolT = null, doneStart = null, doneTimer = null;
 
@@ -110,10 +115,14 @@ function showPage(p) {
   live.pageState = p; host.show(p); host.update(live);
   activeChart = host.graphs[PAGE_GRAPH[p]] || null;
   if (activeChart) {
+    if (activeChart.setTheme) activeChart.setTheme(curTheme());
     activeChart.resize();
     if (isPreviewPage(p) && activeChart.renderPreview) activeChart.renderPreview(preview);
     else activeChart.render(buf);
   }
+  // steam/water running-page mini graph: theme + size + (re)draw the run so far
+  const mini = p === 'steam' ? host.graphs.steam_mini : (p === 'water' ? host.graphs.water_mini : null);
+  if (mini) { if (mini.setTheme) mini.setTheme(curTheme()); mini.resize(); mini.render(runBuf); }
 }
 function setFamily(fam) { currentFamily = fam; live.family = fam; showPage(families[fam].base); writeHash('#/' + fam); }
 
@@ -145,6 +154,15 @@ window.addEventListener('hashchange', applyRoute);
 // Language change (from Settings › Language): re-render the current page so the
 // i18n-bound labels (tab names, etc.) pick up the new language.
 window.addEventListener('insight-langchange', () => { if (live.pageState) showPage(live.pageState); });
+// Settings loaded a different profile onto the DE1 — re-read the workflow so the
+// espresso page (title / type / preview curve) reflects the newly-loaded profile.
+window.addEventListener('insight-workflow-changed', () => { loadWorkflow(); });
+// Theme change (Settings › Misc › Insight Dark): re-render so the dark image set
+// + dark ink take effect immediately, and restyle the live chart for dark cards.
+window.addEventListener('insight-themechange', () => {
+  for (const id in host.graphs) { const g = host.graphs[id]; if (g && g.setTheme) g.setTheme(curTheme()); }
+  if (live.pageState) showPage(live.pageState);
+});
 
 // Screensaver: sleep the machine and show the rotating-image saver; a tap wakes.
 // Opening is guarded (safe to call from both the sleep button and the state
@@ -206,11 +224,14 @@ const host = new PageHost(stage, config, actions);
 host.registerGraph('espresso_chart', (n) => new EspressoChart(n));
 host.registerGraph('zoom_pf', (n) => new ZoomChart(n, 'pf'));
 host.registerGraph('zoom_temp', (n) => new ZoomChart(n, 'temp'));
+host.registerGraph('steam_mini', (n) => new MiniChart(n, { series: [{ key: 'temp', color: '#ff7880' }], title: 'Steam temperature (°C)', titleColor: '#ff7880' }));
+host.registerGraph('water_mini', (n) => new MiniChart(n, { series: [{ key: 'temp', color: '#ff7880' }, { key: 'w', color: '#a2693d' }], title: 'Temperature (°C) · weight (g)', titleColor: '#ff7880' }));
 
 async function loadWorkflow() {
   try {
     const wf = await api.getWorkflow();
     const steps = wf?.profile?.steps || [];
+    currentSteps = steps;                              // for the "Current step" card row
     live.profileTitle = wf?.profile?.title || '';
     live.profileType = profileTypeText(steps);
     live.targetTemp = steps?.[0]?.temperature || live.targetTemp;
@@ -241,7 +262,9 @@ function onSnapshot(d) {
   live.pressure = d.pressure; live.flow = d.flow; live.mixTemp = d.mixTemperature;
   live.groupTemp = d.groupTemperature; live.steamTemp = d.steamTemperature;
   live.coffeeTemp = d.mixTemperature; live.metalTemp = d.groupTemperature;
-  live.currentStep = d.currentFrameDescription || d.stepName || live.currentStep;
+  // "Current step" = frame index (1-based) + the step's name, from the loaded profile
+  const fr = (typeof d.profileFrame === 'number') ? d.profileFrame : null;
+  live.currentStep = (fr != null && currentSteps[fr]) ? `${fr + 1}: ${currentSteps[fr].name || currentSteps[fr].pump || ''}` : (fr != null ? `${fr + 1}` : '');
 
   if (st !== machineState) { onStateChange(machineState, st); machineState = st; }
 
@@ -264,6 +287,14 @@ function onSnapshot(d) {
     // puck resistance = pressure / flow^2 (laminar), like Insight's resistance curve
     buf.r.push(d.flow > 0.2 ? +(d.pressure / (d.flow * d.flow)).toFixed(2) : null);
     if (activeChart) activeChart.render(buf);
+  } else if (st === 'steam' || st === 'hotWater') {
+    // feed the running-page mini graph (steam temperature, or water temp+weight)
+    const el = runStart ? (performance.now() - runStart) / 1000 : 0;
+    runBuf.t.push(el);
+    runBuf.temp.push(st === 'steam' ? d.steamTemperature : d.mixTemperature);
+    runBuf.w.push(curWeight);
+    const mini = host.graphs[st === 'steam' ? 'steam_mini' : 'water_mini'];
+    if (mini) mini.render(runBuf);
   }
   host.update(live);
 }
@@ -293,6 +324,7 @@ function onStateChange(prev, next) {
   if (runFam) {
     currentFamily = runFam; live.family = runFam;
     if (next === 'espresso') { shotStart = performance.now(); resetShotStats(); resetBuf(); }
+    if (next === 'steam' || next === 'hotWater') { runStart = performance.now(); resetRunBuf(); }
     showPage(families[runFam].run);
   } else if (prevFam && (next === 'idle' || next === 'ready')) {
     if (prevFam === 'espresso') startDoneTimer();
@@ -305,6 +337,7 @@ function onStateChange(prev, next) {
 function onScale(d) { if (typeof d.weight === 'number') { curWeight = d.weight; live.weight = d.weight; } }
 
 async function init() {
+  if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark';  // restore saved theme
   initI18n();                                                // load the translation CSV (async; re-renders on ready)
   applyRoute();                                              // restore tab/settings from the URL
   if (!location.hash) history.replaceState(null, '', '#/' + currentFamily);  // canonicalise bare URL

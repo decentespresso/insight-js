@@ -88,7 +88,42 @@ export class EspressoChart {
     this.layout.datarevision++;
     Plotly.react(this.el, this.traces, this.layout, this.config);
   }
+  // Insight Dark: the chart sits on a dark card, so swap the white plot fill +
+  // light grid for dark equivalents (the coloured lines/axes read fine on both).
+  setTheme(theme) { applyChartTheme(this, theme, ['xaxis', 'xaxis2', 'xaxis3', 'yaxis', 'yaxis2', 'yaxis3']); }
   resize() { try { Plotly.Plots.resize(this.el); } catch (e) { logger.warn('resize', e); } }
+}
+
+// Small single-panel live graph for the steam / water run pages (temperature,
+// plus optional weight for water). Minimal chrome; grows its x-axis with the run.
+export class MiniChart {
+  constructor(el, opts = {}) {
+    this.el = el; this.series = opts.series || [{ key: 'temp', color: COL.temp }];
+    this.traces = this.series.map((s) => trace(s.color, 'x', 'y', null, 7));
+    this.layout = { margin: { l: 64, r: 18, t: 20, b: 30 }, showlegend: false,
+      paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: COL.bg,
+      xaxis: { gridcolor: COL.grid, gridwidth: 2, zeroline: false, fixedrange: true, showline: false,
+        ticks: '', showticklabels: false, rangemode: 'tozero', autorange: true },
+      yaxis: { gridcolor: COL.grid, gridwidth: 2, zeroline: false, fixedrange: true, showline: false,
+        tickfont: { color: '#8a8a8a', size: 28, family: FONT }, autorange: true },
+      annotations: [{ text: opts.title || '', xref: 'paper', yref: 'paper', x: 0, xanchor: 'left',
+        y: 1.02, yanchor: 'bottom', showarrow: false, font: { color: opts.titleColor || COL.temp, size: 30, family: FONT, weight: 700 } }],
+      datarevision: 0 };
+    this.config = { displayModeBar: false, responsive: true, staticPlot: true };
+    Plotly.newPlot(this.el, this.traces, this.layout, this.config);
+  }
+  render(buf) { this.traces.forEach((tr, i) => { tr.x = buf.t; tr.y = buf[this.series[i].key]; }); this.layout.datarevision++; Plotly.react(this.el, this.traces, this.layout, this.config); }
+  setTheme(theme) { applyChartTheme(this, theme, ['xaxis', 'yaxis']); }
+  resize() { try { Plotly.Plots.resize(this.el); } catch (e) { logger.warn('resize', e); } }
+}
+
+function applyChartTheme(chart, theme, axes) {
+  const dark = theme === 'dark';
+  const bg = dark ? '#1b1d29' : COL.bg, grid = dark ? '#3a3d4a' : COL.grid;
+  chart.layout.plot_bgcolor = bg;
+  const relayout = { plot_bgcolor: bg };
+  axes.forEach((a) => { if (chart.layout[a]) { chart.layout[a].gridcolor = grid; relayout[a + '.gridcolor'] = grid; } });
+  try { Plotly.relayout(chart.el, relayout); } catch (e) { /* ignore */ }
 }
 
 // Single big panel: mode 'pf' (pressure+flow+weight, 0-12) or 'temp' (temperature).
@@ -150,5 +185,6 @@ export class ZoomChart {
     this.layout.yaxis.range = range.slice(); this.layout.yaxis.autorange = false;
     Plotly.relayout(this.el, { 'yaxis.range': range.slice() });
   }
+  setTheme(theme) { applyChartTheme(this, theme, ['xaxis', 'yaxis']); }
   resize() { try { Plotly.Plots.resize(this.el); } catch (e) { logger.warn('resize', e); } }
 }

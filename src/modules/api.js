@@ -43,6 +43,9 @@ export const getLatestShot = () => j('GET', '/shots/latest');
 export const updateShot = (id, data) => j('PUT', `/shots/${encodeURIComponent(id)}`, data);
 export const getProfile = (id) => j('GET', `/profiles/${encodeURIComponent(id)}`);
 export const saveProfile = (profile) => j('POST', '/profiles', { profile });
+export const updateProfile = (id, profile) => j('PUT', `/profiles/${encodeURIComponent(id)}`, { profile }); // rename / edit metadata
+export const deleteProfile = (id) => fetch(`${API_BASE}/profiles/${encodeURIComponent(id)}`, { method: 'DELETE' }); // soft delete
+export const setProfileVisibility = (id, visibility) => j('PUT', `/profiles/${encodeURIComponent(id)}/visibility`, { visibility }); // visible|hidden|deleted
 export const getMachineSettings = () => j('GET', '/machine/settings');
 export const setMachineSettings = (s) => j('POST', '/machine/settings', s);
 export const setShotSettings = (s) => j('POST', '/machine/shotSettings', s);
