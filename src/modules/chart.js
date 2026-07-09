@@ -31,7 +31,7 @@ const yAxis = (color, domain, extra) => ({ domain, gridcolor: COL.grid, gridwidt
 // y-axis numbers, rather than at the plot-area edge.
 const title = (text, color, ytop) => ({ text, xref: 'paper', yref: 'paper',
   x: -0.03, xanchor: 'left', y: ytop, yanchor: 'bottom', showarrow: false,
-  font: { color, size: 40, family: FONT, weight: 700 } });
+  font: { color, size: 34, family: FONT, weight: 700 } });
 
 // Zoomed single-panel view: neutral grey axes (Insight draws zoom axes in grey,
 // not the panel accent), and top titles anchored left/centre/right.
@@ -62,9 +62,11 @@ export class EspressoChart {
       yaxis2: yAxis(COL.flow, [0.40, 0.65], { range: [0, 8.01], tickvals: [1, 2, 3, 4, 5, 6, 7, 8] }),
       yaxis3: yAxis(COL.temp, [0.06, 0.31], { range: [79, 93], tickvals: [80, 85, 90] }),
       annotations: [
-        title('Pressure (bar)', COL.pressure, 0.99),
-        title('Flow (mL/s)', COL.flow, 0.65),
-        title('Temperature (°C)', COL.temp, 0.31),
+        // smaller title font (34 vs 40) plus a few-px lift above each panel top
+        // keeps the label clear of the top y-tick number (11 / 8 / 90).
+        title('Pressure (bar)', COL.pressure, 0.996),
+        title('Flow (mL/s)', COL.flow, 0.656),
+        title('Temperature (°C)', COL.temp, 0.316),
       ],
       datarevision: 0 };
     this.config = { displayModeBar: false, responsive: true, staticPlot: true };

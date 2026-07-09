@@ -5,7 +5,7 @@
 const n0 = (v) => (typeof v === 'number' ? Math.round(v) : 0);
 const n1 = (v) => (typeof v === 'number' ? v.toFixed(1) : '0.0');
 const C = { title: '#42465c', val: '#4979e9', wait: '#2d3046', mode: '#969eb1', slabel: '#7e8496', sval: '#9aa0b0' };
-const F = { title: 52, val: 52, cap: 30, wait: 66, mode: 40, set: 40 };
+const F = { title: 36, val: 52, cap: 30, wait: 66, mode: 40, set: 40 };  // title 30% smaller (was 52)
 const row = (pages, x, y, anchor, fill, bind, o = {}) => ({ kind: 'var', pages, x, y, anchor,
   size: o.size || F.set, weight: o.weight || 'normal', fill, bind, spacing: o.spacing });
 

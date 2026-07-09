@@ -137,6 +137,110 @@ html, body { margin: 0; background: #000; color: var(--ins-ink); overflow: hidde
 .live-tile.timer b { color: var(--ins-green-dark); }
 .brew-screen.simple .brew-actions { margin-top: auto; }
 
+/* ---- Screensaver (Insight "saver" page) ---- */
+/* Sits above every page/overlay and fills the stage. Two crossfading layers of
+   full-bleed images; tap anywhere to wake. */
+#saver { position: absolute; inset: 0; z-index: 40; background: #000; cursor: pointer; overflow: hidden; }
+.saver-layer { position: absolute; inset: 0; background-size: cover; background-position: center;
+  background-repeat: no-repeat; opacity: 0; transition: opacity 1.2s ease-in-out; will-change: opacity; }
+.saver-clock { position: absolute; left: 50%; top: 45%; display: none;
+  font-family: 'InsightUI', Helvetica, Arial, sans-serif; font-weight: bold;
+  font-size: 3.4vw; color: #f8f8f8; pointer-events: none; white-space: nowrap;
+  text-shadow: 2px 2px 0 #444, -2px -2px 0 #ccc; transition: left .8s ease, top .8s ease; }
+
+/* ---- Image-backed settings stage (same 2560x1600 model as the brew pages) ---- */
+.s2stage { width: min(100%, calc(100vh * 2560 / 1600)); aspect-ratio: 2560 / 1600; margin: 0 auto;
+  background: #dfe1ee; position: relative; overflow: hidden; }
+.s2page { position: absolute; left: 0; top: 0; width: 2560px; height: 1600px; transform-origin: top left;
+  background-repeat: no-repeat; background-position: 0 0; background-size: 2560px 1600px; }
+/* profile list injected over the settings_1 left card (2560-space px, scales with the page) */
+.s2-preset-scroll { position: absolute; left: 40px; top: 310px; width: 1000px; height: 740px; overflow-y: auto;
+  font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
+.s2-preset-row { display: block; width: 100%; text-align: left; border: none; background: transparent;
+  padding: 16px 20px; font-size: 40px; color: #2d3046; cursor: pointer; border-radius: 10px; font-family: inherit; }
+.s2-preset-row:hover { background: #f0f1fa; }
+.s2-preset-row.sel { background: #c7cbe4; }
+/* dialog content injected into the white panel of settings_message.png (2560-space) */
+.s2-dialog-content { position: absolute; left: 320px; top: 480px; width: 1920px; height: 690px; overflow-y: auto;
+  padding: 0 40px; font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
+/* legacy sub-panel (kept for safety; no longer used) */
+.s2-subpanel { position: absolute; left: 30px; top: 210px; right: 30px; bottom: 60px; background: #fff;
+  border-radius: 20px; padding: 40px 48px; overflow-y: auto; box-shadow: 0 6px 30px rgba(40,45,70,.15);
+  font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
+.s2-subpanel h2 { margin: 0 0 8px; font-size: 56px; color: #2d3046; }
+.s2-sp-back { border: none; background: #c7cbe4; color: #3d4468; font-weight: 600; font-size: 34px;
+  padding: 14px 34px; border-radius: 40px; cursor: pointer; margin-bottom: 24px; font-family: inherit; }
+.s2-sp-row { display: flex; align-items: center; gap: 20px; width: 100%; text-align: left; border: none;
+  background: #f3f4fb; padding: 26px 30px; border-radius: 14px; margin-bottom: 12px; cursor: pointer; font-family: inherit; }
+.s2-sp-row.sel { background: #c7cbe4; }
+.s2-sp-name { font-size: 46px; color: #2d3046; }
+.s2-sp-sub { font-size: 30px; color: #7e8496; margin-top: 4px; }
+.s2-sp-note { font-size: 28px; color: #b06a6a; font-style: italic; margin-top: 20px; line-height: 1.4; }
+.s2-sp-btn { border: none; background: #4979e9; color: #fff; font-weight: 700; font-size: 34px;
+  padding: 20px 40px; border-radius: 40px; cursor: pointer; margin: 12px 12px 0 0; font-family: inherit; }
+.s2-sp-btn.grey { background: #c7cbe4; color: #3d4468; }
+
+/* ---- (legacy) flat-card settings styles, still used by other overlays ---- */
+.s2 { display: flex; flex-direction: column; height: 100%; background: #eceef7; color: #2d3046; position: relative;
+  font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
+.s2-tabs { display: flex; gap: 4px; padding: 10px 12px 0; background: #d9dcea; }
+.s2-tab { flex: 1; border: none; background: transparent; color: #7e8496; font-size: clamp(14px, 1.6vw, 22px);
+  font-weight: 700; letter-spacing: .5px; padding: 14px 8px; border-radius: 12px 12px 0 0; cursor: pointer; }
+.s2-tab.active { background: #eceef7; color: #2d3046; }
+.s2-body { flex: 1; overflow-y: auto; padding: 18px; }
+.s2-loading { padding: 40px; text-align: center; color: #7e8496; }
+.s2-foot { display: flex; justify-content: flex-end; gap: 14px; padding: 12px 18px; background: #d9dcea; }
+.s2-btn { border: none; border-radius: 12px; padding: 12px 30px; font-size: 17px; font-weight: 600; cursor: pointer;
+  background: #c7cbe4; color: #3d4468; }
+.s2-btn.s2-ok { background: #4979e9; color: #fff; }
+.s2-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.s2-card { background: #fff; border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(40,45,70,.06); }
+.s2-card-h { margin: 0 0 12px; font-size: 19px; font-weight: 700; color: #42465c; }
+.s2-kv { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 0; }
+.s2-k { color: #5a5d75; font-size: 16px; }
+.s2-v { color: #2d3046; font-size: 16px; }
+.s2-v.accent { color: #4979e9; font-weight: 700; }
+.s2-muted { color: #7e8496; font-size: 14px; line-height: 1.4; margin: 6px 0; }
+.s2-na { color: #b06a6a; font-size: 13px; line-height: 1.4; margin: 8px 0 0; font-style: italic; }
+.s2-slider { margin: 10px 0; }
+.s2-slider label { display: block; color: #42465c; font-weight: 600; font-size: 15px; margin-bottom: 6px; }
+.s2-slider-row { display: flex; align-items: center; gap: 12px; }
+.s2-slider-row input[type=range] { flex: 1; accent-color: #4979e9; height: 6px; }
+.s2-slider-val { color: #4979e9; font-weight: 700; min-width: 74px; text-align: right; }
+.s2-toggle { display: flex; align-items: center; gap: 12px; margin: 12px 0; }
+.s2-toggle label { color: #42465c; font-size: 15px; }
+.s2-pill { width: 54px; height: 30px; border-radius: 16px; border: none; background: #c7cbe4; position: relative; cursor: pointer; padding: 0; flex: 0 0 auto; }
+.s2-pill span { position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.s2-pill.on { background: #4979e9; }
+.s2-pill.on span { left: 27px; }
+.s2-btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.s2-big { border: none; border-radius: 12px; background: #c7cbe4; color: #3d4468; font-size: 16px; font-weight: 600;
+  padding: 20px 10px; cursor: pointer; text-align: center; }
+.s2-big.disabled { opacity: .5; cursor: not-allowed; }
+.s2-devs { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.s2-dev { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: #f3f4fb; border-radius: 10px; }
+.s2-dev-name { font-weight: 600; }
+.s2-dev-type { color: #7e8496; font-size: 13px; }
+.s2-dev-state { margin-left: auto; color: #b06a6a; font-size: 13px; }
+.s2-dev-state.ok { color: #4a9d5b; }
+.s2-mini { border: none; border-radius: 9px; background: #c7cbe4; color: #3d4468; font-weight: 600; padding: 8px 16px; cursor: pointer; font-size: 14px; }
+.s2-mini.wide { width: 100%; padding: 12px; }
+.s2-subhead { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+.s2-subtitle { margin: 0; font-size: 26px; font-weight: 700; color: #2d3046; }
+.s2-plist { display: flex; flex-direction: column; gap: 2px; max-width: 520px; margin-bottom: 12px; }
+.s2-pitem { text-align: left; border: none; background: transparent; padding: 12px 14px; font-size: 18px; color: #2d3046; cursor: pointer; border-radius: 8px; }
+.s2-pitem:hover { background: #f3f4fb; }
+.s2-pitem.current, .s2-pitem.sel { background: #c7cbe4; }
+.s2-ext { display: flex; gap: 12px; align-items: baseline; padding: 10px 14px; border-bottom: 1px solid #eceef7; }
+.s2-ext-name { font-size: 17px; }
+.s2-ext-auth { color: #7e8496; font-size: 13px; }
+.s2-split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.s2-preset-list { display: flex; flex-direction: column; gap: 2px; max-height: 62vh; overflow-y: auto; background: #fff; border-radius: 12px; padding: 8px; }
+.s2-preset-side { background: #fff; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.s2-toast { position: absolute; bottom: 78px; left: 50%; transform: translateX(-50%) translateY(10px); background: #2d3046; color: #fff;
+  padding: 10px 20px; border-radius: 10px; font-size: 15px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; }
+.s2-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
 /* ---- Overlay + profile picker ---- */
 #overlay { position: absolute; inset: 0; background: #fff; z-index: 20; display: none; flex-direction: column; }
 #overlay.open { display: flex; }

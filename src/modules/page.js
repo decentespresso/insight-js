@@ -15,9 +15,11 @@ const ANCHOR = {
 };
 
 export class PageHost {
-  constructor(stageEl, config, actions) {
+  constructor(stageEl, config, actions, pageEl) {
     this.stage = stageEl;
-    this.page = document.getElementById('page');
+    // page canvas defaults to the global #page (brew host), but a second host
+    // (e.g. the image-backed settings dialog) can pass its own page element.
+    this.page = pageEl || document.getElementById('page');
     this.config = config;               // { imgBase, pages:{id:bg}, elements:[...] }
     this.actions = actions || {};       // { actionName: fn }
     this.live = {};                     // live values for variable binds
@@ -57,6 +59,7 @@ export class PageHost {
           fontSize: (el.size ? el.size + 'px' : ''), fontFamily: el.family || "'InsightUI', Helvetica, Arial, sans-serif",
           fontWeight: el.weight || 'normal', width: el.width ? el.width + 'px' : '',
           letterSpacing: el.spacing ? el.spacing + 'px' : '',
+          whiteSpace: el.wrap ? 'normal' : '', lineHeight: el.wrap ? '1.3' : '',
         });
         if (el.text != null) node.textContent = el.text;
       } else if (el.kind === 'box') {

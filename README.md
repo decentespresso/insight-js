@@ -56,3 +56,13 @@ font/position fine-calibration against `./unde1plus-arm64.sh`.
 
 Deploy (later): GitHub Action on tag → build, write `skin-manifest.json`, zip,
 attach to a Release; install via `POST /api/v1/webui/skins/install/github-release`.
+
+## License
+
+**GPL-3.0-or-later.** insight.js is a port of the de1app **Insight** skin and
+reuses de1app assets and data — the page background images (default skin),
+screensaver images, and the GUI translation sheet
+(`src/i18n/de1-translations.csv`) — all of which are GPL-3 from
+[decentespresso/de1app](https://github.com/decentespresso/de1app). Vendored
+third-party libraries keep their own licenses: Plotly (MIT), Noto Sans UI fonts
+(OFL). See [LICENSE](LICENSE).

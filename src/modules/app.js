@@ -8,9 +8,11 @@ import { EspressoChart, ZoomChart } from './chart.js';
 import { config, families, stateToFamily } from '../config/index.js';
 import { openProfileSelector } from '../views/profile_selector.js';
 import { openDYE } from '../views/dye.js';
-import { openSettings } from '../views/settings.js';
+import { openSettings, isSettingsOpen, settingsGoto, closeSettings } from '../views/settings.js';
 import { openProfileEditor } from '../views/profile_editor.js';
 import { openNumpad } from '../views/numpad.js';
+import { openSaver, closeSaver, isSaverOpen } from '../views/saver.js';
+import { initI18n } from './i18n.js';
 
 setDebug(true);
 
@@ -56,16 +58,21 @@ function buildPreview(steps) {
   }
   let clock = 0, prevP = sp, prevF = sf;
   for (let i = 0; i < draw.length; i++) {
-    const { s, dur } = draw[i], next = draw[i + 1];
+    const { s, dur } = draw[i], prev = draw[i - 1], next = draw[i + 1];
     const smooth = s.transition === 'smooth', temp = +s.temperature;
+    // A pump handoff (pressure<->flow); the incoming line should rise from 0 at
+    // the handoff, like Insight (the outgoing line separately drops to 0 below).
+    const handoffIn = prev && prev.s.pump !== s.pump;
     if (s.pump === 'pressure') {
       const v = +s.pressure, from = smooth && prevP != null ? prevP : v;
+      if (handoffIn) { out.t.push(clock); out.p.push(0); out.f.push(null); out.T.push(temp); }
       out.t.push(clock, clock + dur); out.p.push(from, v); out.f.push(null, null); out.T.push(temp, temp);
       prevP = v;
       // Insight drops the pressure line to 0 where pressure control hands off to flow
       if (next && next.s.pump !== 'pressure') { out.t.push(clock + dur); out.p.push(0); out.f.push(null); out.T.push(temp); }
     } else {
       const v = +s.flow, from = smooth && prevF != null ? prevF : v;
+      if (handoffIn) { out.t.push(clock); out.f.push(0); out.p.push(null); out.T.push(temp); }
       out.t.push(clock, clock + dur); out.f.push(from, v); out.p.push(null, null); out.T.push(temp, temp);
       prevF = v;
       if (next && next.s.pump !== 'flow') { out.t.push(clock + dur); out.f.push(0); out.p.push(null); out.T.push(temp); }
@@ -108,7 +115,42 @@ function showPage(p) {
     else activeChart.render(buf);
   }
 }
-function setFamily(fam) { currentFamily = fam; live.family = fam; showPage(families[fam].base); }
+function setFamily(fam) { currentFamily = fam; live.family = fam; showPage(families[fam].base); writeHash('#/' + fam); }
+
+// --- Hash routing: #/<family> and #/settings/<tab> so each tab has a URL that
+// survives a refresh and can be bookmarked. We push our own routes with
+// pushState (which does not fire hashchange), and re-apply on back/forward
+// (popstate) and manual hash edits (hashchange). applyingRoute suppresses the
+// write-back while we are applying an incoming route, so there is no loop.
+const FAM_ROUTES = ['espresso', 'steam', 'water', 'flush'];
+const SETTINGS_TABS = ['presets', 'advanced', 'machine', 'app'];
+let applyingRoute = false;
+function writeHash(h) { if (applyingRoute) return; if (location.hash !== h) history.pushState(null, '', h); }
+const settingsHooks = { onTab: (tab) => writeHash('#/settings/' + tab), onClose: () => writeHash('#/' + currentFamily) };
+function applyRoute() {
+  applyingRoute = true;
+  try {
+    const parts = (location.hash || '').replace(/^#\/?/, '').split('/').filter(Boolean);
+    if (parts[0] === 'settings') {
+      const tab = SETTINGS_TABS.includes(parts[1]) ? parts[1] : 'machine';
+      if (!isSettingsOpen()) openSettings(tab, settingsHooks); else settingsGoto(tab);
+    } else {
+      if (isSettingsOpen()) closeSettings();
+      setFamily(FAM_ROUTES.includes(parts[0]) ? parts[0] : 'espresso');
+    }
+  } finally { applyingRoute = false; }
+}
+window.addEventListener('popstate', applyRoute);
+window.addEventListener('hashchange', applyRoute);
+// Language change (from Settings › Language): re-render the current page so the
+// i18n-bound labels (tab names, etc.) pick up the new language.
+window.addEventListener('insight-langchange', () => { if (live.pageState) showPage(live.pageState); });
+
+// Screensaver: sleep the machine and show the rotating-image saver; a tap wakes.
+// Opening is guarded (safe to call from both the sleep button and the state
+// snapshot, so an externally-triggered sleep also shows the saver).
+function wake() { api.setMachineState('idle').catch((e) => logger.warn('wake', e)); api.restoreDisplay(); }
+function showSaver() { api.dimDisplay(); openSaver(wake); }
 
 const actions = {
   navFlush: () => setFamily('flush'), navEspresso: () => setFamily('espresso'),
@@ -120,8 +162,8 @@ const actions = {
   stopEspresso: () => api.setMachineState('idle'), stopSteam: () => api.setMachineState('idle'),
   stopWater: () => api.setMachineState('idle'), stopFlush: () => api.setMachineState('idle'),
   skipStep: () => api.setMachineState('skipStep').catch(() => {}),
-  sleep: () => api.setMachineState('sleeping'),
-  settings: () => openSettings(),
+  sleep: () => { api.setMachineState('sleeping').catch((e) => logger.warn('sleep', e)); showSaver(); },
+  settings: () => openSettings('machine', settingsHooks),
   editProfile: () => openProfileEditor(() => { loadWorkflow(); host.update(live); }),
   describe: () => openDYE(),
   profileSelect: () => openProfileSelector((p) => { live.profileTitle = p.title; loadWorkflow(); host.update(live); }),
@@ -245,6 +287,8 @@ function startDoneTimer() {
 
 function onStateChange(prev, next) {
   logger.info(`machine ${prev} -> ${next}`);
+  if (next === 'sleeping') { showSaver(); return; }        // asleep => dim + screensaver
+  if (prev === 'sleeping') { api.restoreDisplay(); if (isSaverOpen()) closeSaver(); }  // woke => restore + dismiss
   const runFam = stateToFamily[next], prevFam = stateToFamily[prev];
   if (runFam) {
     currentFamily = runFam; live.family = runFam;
@@ -261,8 +305,11 @@ function onStateChange(prev, next) {
 function onScale(d) { if (typeof d.weight === 'number') { curWeight = d.weight; live.weight = d.weight; } }
 
 async function init() {
-  setFamily('espresso');
+  initI18n();                                                // load the translation CSV (async; re-renders on ready)
+  applyRoute();                                              // restore tab/settings from the URL
+  if (!location.hash) history.replaceState(null, '', '#/' + currentFamily);  // canonicalise bare URL
   await loadWorkflow();
+  api.connectDisplay();
   api.connectSnapshot(onSnapshot);
   api.connectScale(onScale);
 }

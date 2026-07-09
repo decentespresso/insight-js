@@ -4,7 +4,7 @@
 const n0 = (v) => (typeof v === 'number' ? Math.round(v) : 0);
 const n1 = (v) => (typeof v === 'number' ? v.toFixed(1) : '0.0');
 const C = { title: '#42465c', val: '#4979e9', wait: '#2d3046', mode: '#969eb1', slabel: '#7e8496', sval: '#9aa0b0' };
-const F = { title: 52, val: 52, cap: 30, wait: 66, mode: 40, set: 40 };
+const F = { title: 36, val: 52, cap: 30, wait: 66, mode: 40, set: 40 };  // title 30% smaller (was 52)
 const row = (pages, x, y, anchor, fill, bind, o = {}) => ({ kind: 'var', pages, x, y, anchor,
   size: o.size || F.set, weight: o.weight || 'normal', fill, bind, spacing: o.spacing });
 
@@ -14,8 +14,10 @@ export const flushConfig = {
     // ---- card titles ----
     row(['preheat_1'], 70, 250, 'nw', C.title, () => '1) Choose auto-off time', { size: F.title, weight: 'bold' }),
     row(['preheat_1'], 1056, 250, 'nw', C.title, () => '2) Hot water will pour', { size: F.title, weight: 'bold' }),
-    // warning shown when a long, fast flush could cool the group head
-    row(['preheat_1'], 400, 370, 'center', '#5a5d75', (l) => (l.flushSeconds > 10 && l.flushFlowMax > 4.0 ? 'Warning: long flush times can cool the group head' : ''), { size: 32 }),
+    // warning shown when a long, fast flush could cool the group head; left-
+    // aligned under the "1)" title (x=70), matching Tcl (centered in a wide box
+    // whose left edge sits under the "1").
+    row(['preheat_1'], 70, 370, 'nw', '#5a5d75', (l) => (l.flushSeconds > 10 && l.flushFlowMax > 4.0 ? 'Warning: long flush times can cool the group head' : ''), { size: 32 }),
 
     // ---- auto-off clicker (glass dial): + top / - bottom ----
     { kind: 'button', pages: ['preheat_1'], rect: [290, 570, 750, 865], action: 'adjust',
