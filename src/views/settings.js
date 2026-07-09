@@ -25,7 +25,7 @@ const FONT = "'InsightUI', Helvetica, Arial, sans-serif";
 // element helpers (mirror the brew configs)
 const V = (pages, x, y, o) => ({ kind: 'var', pages, x, y, anchor: o.anchor || 'nw', size: o.size || 34,
   weight: o.weight || 'normal', fill: o.fill || C.dark, family: FONT, bind: o.bind, fillBind: o.fillBind,
-  spacing: o.spacing, width: o.width, wrap: o.wrap, clamp: o.clamp, scroll: o.scroll, notPages: o.notPages });
+  spacing: o.spacing, width: o.width, wrap: o.wrap, justify: o.justify, clamp: o.clamp, scroll: o.scroll, notPages: o.notPages });
 const B = (pages, rect, action, notPages) => ({ kind: 'button', pages, rect, action, notPages });
 
 // The 4 settings tabs share this top bar (icons are baked; labels overlaid).
@@ -171,17 +171,19 @@ const presetEls = [
 // from the default skin's create_preset page (de1_skin_settings.tcl).
 const CH = ['settings_3_choices'];
 const createPresetEls = [
-  V(CH, 1280, 150, { anchor: 'center', size: 60, weight: 'bold', fill: '#444444', bind: () => t('New Preset') }),
-  V(CH, 1280, 640, { anchor: 'center', size: 46, weight: 'bold', fill: '#444444', bind: () => t('What kind of preset?') }),
-  V(CH, 520, 900, { anchor: 'center', size: 48, weight: 'bold', fill: '#5a5d75', bind: () => t('Pressure') }),
-  V(CH, 1280, 900, { anchor: 'center', size: 48, weight: 'bold', fill: '#5a5d75', bind: () => t('Flow') }),
-  V(CH, 2060, 900, { anchor: 'center', size: 48, weight: 'bold', fill: '#5a5d75', bind: () => t('Advanced') }),
-  V(CH, 2060, 1050, { anchor: 'center', size: 30, width: 640, wrap: true, fill: '#5a5d75', bind: () => t('Your existing profile will be automatically copied.') }),
+  // Font sizes track the Tcl (de1_skin_settings.tcl ~L2011): Helv_20_bold / _15_bold
+  // / _10_bold / _7 -> multipliers 37/24/19/14; our Helv_10_bold == 48px, so px = mult*48/19.
+  V(CH, 1280, 90, { anchor: 'center', size: 94, weight: 'bold', fill: '#444444', bind: () => t('New Preset') }),
+  V(CH, 1280, 650, { anchor: 'center', size: 61, weight: 'bold', fill: '#444444', bind: () => t('What kind of preset?') }),
+  V(CH, 520, 910, { anchor: 'center', size: 48, weight: 'bold', fill: '#5a5d75', bind: () => t('Pressure') }),
+  V(CH, 1280, 910, { anchor: 'center', size: 48, weight: 'bold', fill: '#5a5d75', bind: () => t('Flow') }),
+  V(CH, 2060, 910, { anchor: 'center', size: 48, weight: 'bold', fill: '#5a5d75', bind: () => t('Advanced') }),
+  V(CH, 2060, 1060, { anchor: 'center', size: 35, width: 600, wrap: true, justify: 'center', fill: '#5a5d75', bind: () => t('Your existing profile will be automatically copied.') }),
   B(CH, [220, 690, 800, 1190], 'newPressure'),
   B(CH, [980, 690, 1580, 1190], 'newFlow'),
   B(CH, [1760, 690, 2350, 1190], 'newAdvanced'),
   B(CH, [2016, 1430, 2560, 1600], 'choicesCancel'),
-  V(CH, 2275, 1500, { anchor: 'center', size: 48, weight: 'bold', fill: '#fafbff', bind: () => t('Cancel') }),
+  V(CH, 2275, 1520, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('Cancel') }),
 ];
 
 // ---- ADVANCED — the editor page tracks the profile type -------------------
@@ -240,6 +242,13 @@ export const isSettingsOpen = () => opened;
 export async function settingsGoto(tab) { if (opened) await goto(tab); }       // route-driven tab switch
 export function closeSettings() { if (!opened) return; cleanup(); closeOverlay(); opened = false; } // route-driven close (no onClose)
 
+// New-Preset chooser (settings_3_choices) open/close, driven either by taps or by
+// the #/settings/presets/new route so a refresh re-shows it. chooserOpen tracks it.
+let chooserOpen = false;
+export const isChooserOpen = () => chooserOpen;
+export function settingsShowChooser() { if (!opened || !host) return; chooserOpen = true; host.show('settings_3_choices'); host.update(live); presetChrome(false); }
+export function settingsHideChooser() { if (!opened || !host) return; chooserOpen = false; host.show('settings_1'); host.update(live); presetChrome(true); }
+
 export async function openSettings(startTab = 'machine', h = {}) {
   hooks = h; opened = true;
   const stage = document.createElement('div');
@@ -256,7 +265,7 @@ export async function openSettings(startTab = 'machine', h = {}) {
 }
 
 async function goto(tab) {
-  curTab = tab; live.tab = tab;
+  curTab = tab; live.tab = tab; chooserOpen = false;   // leaving to any tab closes the chooser
   // ADVANCED picks its background from the profile type, so load that first.
   if (tab === 'advanced') await loadAdvanced().catch((e) => logger.warn('adv', e));
   const pageId = tab === 'advanced' ? (live.advPage || 'settings_2c') : PAGES[tab];
@@ -688,6 +697,7 @@ function miscPanel(body) {
 // title, seed it as the workflow profile, then open the steps editor to rename +
 // tune. Save in the editor persists it as a new profile.
 async function createPreset(kind) {
+  chooserOpen = false; if (hooks.onChooser) hooks.onChooser(false);   // picking a kind leaves the chooser URL
   try {
     const wf = await api.getWorkflow().catch(() => ({}));
     const base = wf?.profile || {};
@@ -703,8 +713,8 @@ const actions = {
   navPresets: () => goto('presets'), navAdvanced: () => openAdvancedForSelected(), navMachine: () => goto('machine'), navApp: () => goto('app'),
   dialogOk: () => dialogClose(),
   // New-preset chooser
-  newPreset: () => { host.show('settings_3_choices'); host.update(live); presetChrome(false); },
-  choicesCancel: () => { host.show('settings_1'); host.update(live); presetChrome(true); },
+  newPreset: () => { settingsShowChooser(); if (hooks.onChooser) hooks.onChooser(true); },
+  choicesCancel: () => { settingsHideChooser(); if (hooks.onChooser) hooks.onChooser(false); },
   // Trash: default (built-in) profiles are HIDDEN, not deleted (you can't delete a
   // default); user profiles are deleted. No browser confirm dialog.
   deletePreset: async () => {

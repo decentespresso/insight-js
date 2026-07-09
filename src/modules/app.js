@@ -8,7 +8,7 @@ import { EspressoChart, ZoomChart, MiniChart } from './chart.js';
 import { config, families, stateToFamily } from '../config/index.js';
 import { openProfileSelector } from '../views/profile_selector.js';
 import { openDYE } from '../views/dye.js';
-import { openSettings, isSettingsOpen, settingsGoto, closeSettings } from '../views/settings.js';
+import { openSettings, isSettingsOpen, settingsGoto, closeSettings, settingsShowChooser } from '../views/settings.js';
 import { openProfileEditor } from '../views/profile_editor.js';
 import { openNumpad } from '../views/numpad.js';
 import { openSaver, closeSaver, isSaverOpen } from '../views/saver.js';
@@ -135,14 +135,21 @@ const FAM_ROUTES = ['espresso', 'steam', 'water', 'flush'];
 const SETTINGS_TABS = ['presets', 'advanced', 'machine', 'app'];
 let applyingRoute = false;
 function writeHash(h) { if (applyingRoute) return; if (location.hash !== h) history.pushState(null, '', h); }
-const settingsHooks = { onTab: (tab) => writeHash('#/settings/' + tab), onClose: () => writeHash('#/' + currentFamily) };
-function applyRoute() {
+const settingsHooks = {
+  onTab: (tab) => writeHash('#/settings/' + tab),
+  onClose: () => writeHash('#/' + currentFamily),
+  // New-Preset chooser opened/closed -> deep-link so a refresh re-shows the chooser.
+  onChooser: (open) => writeHash(open ? '#/settings/presets/new' : '#/settings/presets'),
+};
+async function applyRoute() {
   applyingRoute = true;
   try {
     const parts = (location.hash || '').replace(/^#\/?/, '').split('/').filter(Boolean);
     if (parts[0] === 'settings') {
       const tab = SETTINGS_TABS.includes(parts[1]) ? parts[1] : 'machine';
-      if (!isSettingsOpen()) openSettings(tab, settingsHooks); else settingsGoto(tab);
+      if (!isSettingsOpen()) await openSettings(tab, settingsHooks); else await settingsGoto(tab);
+      // #/settings/presets/new re-opens the chooser once the presets tab is ready.
+      if (parts[1] === 'presets' && parts[2] === 'new') settingsShowChooser();
     } else {
       if (isSettingsOpen()) closeSettings();
       setFamily(FAM_ROUTES.includes(parts[0]) ? parts[0] : 'espresso');
