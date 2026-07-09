@@ -8,7 +8,7 @@ import { EspressoChart, ZoomChart, MiniChart } from './chart.js';
 import { config, families, stateToFamily } from '../config/index.js';
 import { openProfileSelector } from '../views/profile_selector.js';
 import { openDYE } from '../views/dye.js';
-import { openSettings, isSettingsOpen, settingsGoto, closeSettings, settingsShowChooser } from '../views/settings.js';
+import { openSettings, isSettingsOpen, settingsGoto, closeSettings, settingsShowChooser, settingsEditProfile, settingsLastTab } from '../views/settings.js';
 import { openProfileEditor } from '../views/profile_editor.js';
 import { openNumpad } from '../views/numpad.js';
 import { openSaver, closeSaver, isSaverOpen } from '../views/saver.js';
@@ -140,12 +140,22 @@ const settingsHooks = {
   onClose: () => writeHash('#/' + currentFamily),
   // New-Preset chooser opened/closed -> deep-link so a refresh re-shows the chooser.
   onChooser: (open) => writeHash(open ? '#/settings/presets/new' : '#/settings/presets'),
+  // Profile editor (pressure) -> deep-link by name so a refresh re-opens the editor.
+  onEditProfile: (name) => writeHash('#/settings/presets/profile/edit/' + encodeURIComponent(name || 'Untitled')),
 };
 async function applyRoute() {
   applyingRoute = true;
   try {
     const parts = (location.hash || '').replace(/^#\/?/, '').split('/').filter(Boolean);
     if (parts[0] === 'settings') {
+      // #/settings/presets/profile/edit/<name> -> open the profile editor for <name>.
+      // Enter via a neutral tab (not presets): loadPresets auto-selects a preset
+      // and debounce-loads it onto the workflow, which would clobber our load.
+      if (parts[1] === 'presets' && parts[2] === 'profile' && parts[3] === 'edit') {
+        if (!isSettingsOpen()) await openSettings('machine', settingsHooks);
+        await settingsEditProfile(parts.slice(4).join('/'));
+        return;
+      }
       const tab = SETTINGS_TABS.includes(parts[1]) ? parts[1] : 'machine';
       if (!isSettingsOpen()) await openSettings(tab, settingsHooks); else await settingsGoto(tab);
       // #/settings/presets/new re-opens the chooser once the presets tab is ready.
@@ -188,7 +198,7 @@ const actions = {
   stopWater: () => api.setMachineState('idle'), stopFlush: () => api.setMachineState('idle'),
   skipStep: () => api.setMachineState('skipStep').catch(() => {}),
   sleep: () => { api.setMachineState('sleeping').catch((e) => logger.warn('sleep', e)); showSaver(); },
-  settings: () => openSettings('machine', settingsHooks),
+  settings: () => openSettings(settingsLastTab(), settingsHooks),
   editProfile: () => openProfileEditor(() => { loadWorkflow(); host.update(live); }),
   describe: () => openDYE(),
   profileSelect: () => openProfileSelector((p) => { live.profileTitle = p.title; loadWorkflow(); host.update(live); }),

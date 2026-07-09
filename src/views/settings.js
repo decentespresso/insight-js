@@ -13,6 +13,8 @@ import { openOverlay, closeOverlay } from '../modules/overlay.js';
 import { openGFC } from './gfc.js';
 import { openProfileEditor } from './profile_editor.js';
 import { openMaintenance } from './maintenance.js';
+import { renderPressureEditor, hidePressureEditor, removePressureEditor, ppTempAdjust, ppToggleTempSteps } from './pressure_editor.js';
+import { parsePressure } from '../config/pressure_profile.js';
 import { setLang, currentLangName, LANGUAGES, t } from '../modules/i18n.js';
 import { logger } from '../modules/logger.js';
 
@@ -192,40 +194,52 @@ const createPresetEls = [
 // overlay a title + a full-area tap zone that opens the working steps editor.
 const P2ALL = ['settings_2a', 'settings_2b', 'settings_2c'];
 const P2SLIDE = ['settings_2a', 'settings_2b'];   // pressure / flow: per-step sliders
+// settings_2a (pressure) is now the faithful pressure editor (pressure_editor.js),
+// which owns its own title / temp / chart / sliders — so the generic advEls text
+// below is scoped to 2b/2c only. The temp +/- tap zones stay on all three.
+const P2BC = ['settings_2b', 'settings_2c'];
 const advEls = [
-  V(P2ALL, 60, 245, { size: 50, weight: 'bold', fill: C.title, bind: (l) => `${l.profType || ''} profile: ${l.profTitle || '—'}` }),
+  V(P2BC, 60, 245, { size: 50, weight: 'bold', fill: C.title, bind: (l) => `${l.profType || ''} profile: ${l.profTitle || '—'}` }),
   // Temperature control on the baked thermometer (right side of the top card):
   // +/- adjusts every step's temperature (the de1app simple profile has one temp).
-  V(P2ALL, 2470, 235, { anchor: 'ne', size: 30, fill: C.muted, bind: () => t('Temp') }),
-  V(P2ALL, 2380, 460, { anchor: 'ne', size: 46, weight: 'bold', fill: C.val, bind: (l) => `${Math.round(l.editTemp ?? 92)}°C` }),
+  V(P2BC, 2470, 235, { anchor: 'ne', size: 30, fill: C.muted, bind: () => t('Temp') }),
+  V(P2BC, 2380, 460, { anchor: 'ne', size: 46, weight: 'bold', fill: C.val, bind: (l) => `${Math.round(l.editTemp ?? 92)}°C` }),
   B(P2ALL, [2400, 185, 2560, 380], 'advTempUp'),
   B(P2ALL, [2400, 560, 2560, 745], 'advTempDown'),
+  // Tapping the thermometer body toggles per-step temperatures (pressure editor).
+  B(['settings_2a'], [2400, 380, 2560, 555], 'ppToggleTemps'),
   // "open full editor" link (name / add / delete / advanced steps)
-  V(P2SLIDE, 60, 320, { size: 30, fill: C.val, bind: () => `✎ ${t('Open full editor')}` }),
-  B(P2SLIDE, [40, 300, 760, 375], 'openEditor'),
+  V(['settings_2b'], 60, 320, { size: 30, fill: C.val, bind: () => `✎ ${t('Open full editor')}` }),
+  B(['settings_2b'], [40, 300, 760, 375], 'openEditor'),
   // Advanced (2c): step summary + whole-area tap to open the full editor
   V(['settings_2c'], 60, 350, { size: 30, fill: C.muted, width: 900, bind: (l) => l.profSteps || '' }),
   V(['settings_2c'], 60, 300, { size: 30, fill: C.val, bind: () => `${t('Tap to edit steps')} ✎` }),
   B(['settings_2c'], [40, 380, 2540, 1380], 'openEditor'),
 ];
-// profile type -> label + editor background page
+// profile type -> label + editor background page. A "simple" pressure/flow
+// profile is a (flow-pump) preinfusion followed by a body that's ALL one pump
+// type; anything with a mixed body is Advanced. Preinfusion is excluded from the
+// body test (the DE1 simple pressure profile is flow-preinfuse + pressure body).
 function advType(steps) {
   if (!Array.isArray(steps) || !steps.length) return 'Advanced';
-  const pumps = new Set(steps.map((s) => s.pump));
-  if (pumps.size > 1 || steps.some((s) => s.exit || s.limiter)) return 'Advanced';
+  const body = steps.filter((s) => !/preinf/i.test(s.name || ''));
+  const pumps = new Set((body.length ? body : steps).map((s) => s.pump));
+  if (pumps.size !== 1) return 'Advanced';
   return pumps.has('flow') ? 'Flow' : 'Pressure';
 }
 const ADV_PAGE = { Pressure: 'settings_2a', Flow: 'settings_2b', Advanced: 'settings_2c' };
 
 const config = {
   imgBase: IMG,
-  pages: { settings_1: 'settings_1.png', settings_2a: 'settings_2a.png', settings_2b: 'settings_2b.png',
+  pages: { settings_1: 'settings_1.png', settings_2a: 'settings_2a2.png', settings_2b: 'settings_2b.png',
     settings_2c: 'settings_2c.png', settings_3: 'settings_3.png', settings_4: 'settings_4.png',
     settings_message: 'settings_message.png', settings_3_choices: 'settings_3_choices.png' },
   elements: [...tabBar, ...machineEls, ...appEls, ...presetEls, ...createPresetEls, ...advEls],
 };
 
 let host, live, curTab = 'machine', hooks = {}, opened = false;
+let lastTab = 'machine';   // remembered so the gear reopens the tab you last used
+export const settingsLastTab = () => lastTab;
 
 // Small transient status toast (used by the sub-panels). Was referenced but never
 // defined, so every toast() call threw — added here.
@@ -249,6 +263,23 @@ export const isChooserOpen = () => chooserOpen;
 export function settingsShowChooser() { if (!opened || !host) return; chooserOpen = true; host.show('settings_3_choices'); host.update(live); presetChrome(false); }
 export function settingsHideChooser() { if (!opened || !host) return; chooserOpen = false; host.show('settings_1'); host.update(live); presetChrome(true); }
 
+// Route-driven: open the profile editor for a named profile (#/settings/presets/
+// profile/edit/<name>). Loads that preset onto the workflow, then opens the type-
+// matched editor (pressure -> the parametric settings_2a editor). Falls back to
+// whatever is already on the workflow when the name isn't found (e.g. a fresh copy).
+export async function settingsEditProfile(name) {
+  if (!opened || !host) return;
+  const want = decodeURIComponent(name || '').trim();
+  if (want) {
+    try {
+      const list = await api.getProfiles().catch(() => []);
+      const row = (list || []).find((e) => ((e.profile || e).title || '').trim() === want);
+      if (row) await api.updateWorkflow({ profile: row.profile || row });
+    } catch (e) { logger.warn('editProfile load', e); }
+  }
+  await goto('advanced');
+}
+
 export async function openSettings(startTab = 'machine', h = {}) {
   hooks = h; opened = true;
   const stage = document.createElement('div');
@@ -265,15 +296,20 @@ export async function openSettings(startTab = 'machine', h = {}) {
 }
 
 async function goto(tab) {
-  curTab = tab; live.tab = tab; chooserOpen = false;   // leaving to any tab closes the chooser
+  curTab = tab; live.tab = tab; lastTab = tab; chooserOpen = false;   // remember tab; leaving closes the chooser
   // ADVANCED picks its background from the profile type, so load that first.
   if (tab === 'advanced') await loadAdvanced().catch((e) => logger.warn('adv', e));
   const pageId = tab === 'advanced' ? (live.advPage || 'settings_2c') : PAGES[tab];
   host.show(pageId); host.update(live);
-  if (hooks.onTab) hooks.onTab(curTab);   // reflect the tab in the URL immediately (before data loads)
+  const pressureEdit = tab === 'advanced' && live.advPage === 'settings_2a';
+  // URL: the pressure editor deep-links to /presets/profile/edit/<name>; other
+  // advanced (flow/advanced) + normal tabs keep #/settings/<tab>.
+  if (pressureEdit && hooks.onEditProfile) hooks.onEditProfile(live.profTitle);
+  else if (hooks.onTab) hooks.onTab(curTab);
   closeSubPanel();                        // any open Skin/Language/etc. panel belongs to the old tab
   presetChrome(tab === 'presets');        // list + name field belong only on PRESETS
-  renderAdvSliders();                     // per-step sliders (shown only on 2a/2b)
+  if (pressureEdit) { renderPressureEditor(host, live, saveAdv); const sl = host.page.querySelector('.adv-sliders'); if (sl) sl.style.display = 'none'; }
+  else { hidePressureEditor(host); renderAdvSliders(); }   // per-step sliders (shown only on 2b)
   try {
     if (tab === 'machine') await loadMachine();
     else if (tab === 'app') await loadApp();
@@ -316,10 +352,15 @@ async function loadAdvanced() {
   const wf = await api.getWorkflow().catch(() => ({}));
   const steps = wf?.profile?.steps || [];
   live.profTitle = wf?.profile?.title || 'Untitled';
-  live.profType = advType(steps);
+  // Chooser "Pressure/Flow/Advanced" forces the editor type for a fresh copy;
+  // otherwise (e.g. re-editing) we detect it from the steps.
+  live.profType = live._forceType || advType(steps);
+  live._forceType = null;
   live.advPage = ADV_PAGE[live.profType];
   live._advProfile = structuredClone(wf?.profile || { steps: [] });   // mutable copy the sliders edit
   live.editTemp = steps[0]?.temperature ?? 92;
+  // Pressure profiles get the parametric editor: derive its simple params from steps.
+  if (live.profType === 'Pressure') live._pp = parsePressure(wf?.profile || { steps: [] });
   setTabProfile(wf?.profile);
   live.profSteps = steps.map((s, i) => `${i + 1}. ${s.name || s.pump}  —  ${s.pump === 'flow' ? s.flow + ' mL/s' : s.pressure + ' bar'} · ${s.seconds}s · ${s.temperature}°C`).join('\n');
 }
@@ -704,9 +745,12 @@ async function createPreset(kind) {
     const profile = { ...base, title: t('Untitled') };
     delete profile.id;
     await api.updateWorkflow({ profile });
-    live._newType = kind;
+    live._newType = kind; live._forceType = kind;
   } catch (e) { logger.warn('newPreset', e); }
-  openProfileEditor(() => goto('advanced'));
+  // Pressure -> the parametric editor (settings_2a); Flow/Advanced keep the
+  // generic step editor for now. goto('advanced') dispatches by profile type.
+  if (kind === 'Pressure') goto('advanced');
+  else openProfileEditor(() => goto('advanced'));
 }
 
 const actions = {
@@ -768,8 +812,16 @@ const actions = {
   extPicker: () => subPanel('Extensions', extPanel), misc: () => subPanel('Misc', miscPanel),
   firmware: () => subPanel('Firmware', firmwarePanel),
   appUpdate: () => { toast('Re-pulling skins from source…'); api.updateSkins().then((r) => toast(r.ok ? 'App/skins updated from source' : 'Update failed')).catch(() => toast('Update failed')); },
-  cancel: () => { cleanup(); closeOverlay(); opened = false; if (hooks.onClose) hooks.onClose(); },
-  ok: () => { cleanup(); closeOverlay(); opened = false; if (hooks.onClose) hooks.onClose(); },
+  cancel: () => { clearTimeout(advSaveT); cleanup(); closeOverlay(); opened = false; if (hooks.onClose) hooks.onClose(); },
+  // Ok: flush the in-progress profile edit to the workflow, then close and tell
+  // the espresso page to reload it, so what you edited is what you see.
+  ok: async () => {
+    clearTimeout(advSaveT);
+    if (curTab === 'advanced' && live._advProfile) { try { await api.updateWorkflow({ profile: live._advProfile }); } catch (e) { logger.warn('ok save', e); } }
+    cleanup(); closeOverlay(); opened = false;
+    if (hooks.onClose) hooks.onClose();
+    window.dispatchEvent(new Event('insight-workflow-changed'));
+  },
   // MACHINE
   editCool: () => num('Cool down after (min)', 'coolMin', 5, 240, 5, (v) => api.setPresence({ ...(live._presence || {}), sleepTimeoutMinutes: v }).catch((e) => logger.warn('presence', e))),
   toggleKeepHot: () => { live.keepHot = !live.keepHot; host.update(live); api.setPresence({ ...(live._presence || {}), userPresenceEnabled: !live.keepHot }).catch((e) => logger.warn('presence', e)); },
@@ -783,12 +835,15 @@ const actions = {
   // PRESETS / ADVANCED
   openEditor: () => openProfileEditor(() => goto('advanced')),
   advTempUp: () => advTemp(+1), advTempDown: () => advTemp(-1),
+  ppToggleTemps: () => { ppToggleTempSteps(live); saveAdv(); },
 };
 // Temperature +/- on the 2a/2b/2c thermometer sets every step's temperature.
+// On the pressure editor it drives the parametric temp param instead.
 function advTemp(d) {
+  if (curTab === 'advanced' && live.advPage === 'settings_2a') { ppTempAdjust(live, d); saveAdv(); return; }
   if (!live._advProfile) return;
   live.editTemp = Math.min(105, Math.max(80, Math.round((live.editTemp ?? 92) + d)));
   (live._advProfile.steps || []).forEach((s) => { s.temperature = live.editTemp; });
   host.update(live); saveAdv();
 }
-function cleanup() { closeSubPanel(); if (host) { ['.s2-preset-scroll', '.adv-sliders', '.s2-name-input'].forEach((s) => { const el = host.page.querySelector(s); if (el) el.remove(); }); } }
+function cleanup() { closeSubPanel(); removePressureEditor(host); if (host) { ['.s2-preset-scroll', '.adv-sliders', '.s2-name-input'].forEach((s) => { const el = host.page.querySelector(s); if (el) el.remove(); }); } }

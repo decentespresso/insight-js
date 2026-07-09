@@ -16,3 +16,15 @@ export function openOverlay(node) {
   h.classList.add('open');
 }
 export function closeOverlay() { host && host.classList.remove('open'); }
+
+// Stacking modal layer — sits ABOVE the main overlay so a numpad opened from
+// inside the settings editor doesn't wipe it. Separate node, appended last.
+let modalHost;
+export function openModal(node) {
+  if (!modalHost) { modalHost = document.createElement('div'); modalHost.id = 'modal'; document.getElementById('stage').appendChild(modalHost); }
+  document.getElementById('stage').appendChild(modalHost);   // keep it on top
+  modalHost.innerHTML = '';
+  modalHost.appendChild(node);
+  modalHost.classList.add('open');
+}
+export function closeModal() { modalHost && (modalHost.classList.remove('open'), (modalHost.innerHTML = '')); }

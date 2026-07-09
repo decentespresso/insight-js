@@ -2,7 +2,7 @@
 // a title, a stepper row (min / -10 / -1 / value / +1 / +10 / max), a
 // "Previous values" list, a keypad, and Cancel / Ok. Opened by tapping a value
 // label (flush auto-off, water volume/temp, steam auto-off).
-import { openOverlay, closeOverlay } from '../modules/overlay.js';
+import { openModal, closeModal } from '../modules/overlay.js';
 import { t } from '../modules/i18n.js';
 
 const el = (tag, css, txt) => { const n = document.createElement(tag); if (css) n.style.cssText = css; if (txt != null) n.textContent = txt; return n; };
@@ -55,7 +55,7 @@ export function openNumpad(opts) {
   left.appendChild(stepCard);
 
   // accept a value: save to history, apply, close (used by Ok and previous-value taps)
-  const submit = (v) => { v = clamp(v); savePrev(o.title, v); o.onOk(v); closeOverlay(); };
+  const submit = (v) => { v = clamp(v); savePrev(o.title, v); o.onOk(v); closeModal(); };
 
   // ---- previous values ----
   const prevCard = el('div', 'flex:1;background:#fff;border-radius:10px;padding:22px;display:flex;flex-direction:column;min-height:0;');
@@ -96,9 +96,9 @@ export function openNumpad(opts) {
     b.addEventListener('click', fn);
     return b;
   };
-  footer.appendChild(foot(t('Cancel'), false, () => closeOverlay()));
+  footer.appendChild(foot(t('Cancel'), false, () => closeModal()));
   footer.appendChild(foot(t('Ok'), true, () => submit(parseFloat(entry) || o.min)));
   root.appendChild(footer);
 
-  openOverlay(root);
+  openModal(root);
 }
