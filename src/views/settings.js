@@ -13,8 +13,9 @@ import { openOverlay, closeOverlay } from '../modules/overlay.js';
 import { openGFC } from './gfc.js';
 import { openProfileEditor } from './profile_editor.js';
 import { openMaintenance } from './maintenance.js';
-import { renderPressureEditor, hidePressureEditor, removePressureEditor, ppTempAdjust, ppToggleTempSteps } from './pressure_editor.js';
+import { renderProfileEditor, hideProfileEditor, removeProfileEditor, ppTempAdjust, ppToggleTempSteps, PRESSURE_SPEC, FLOW_SPEC } from './pressure_editor.js';
 import { parsePressure } from '../config/pressure_profile.js';
+import { parseFlow } from '../config/flow_profile.js';
 import { setLang, currentLangName, LANGUAGES, t } from '../modules/i18n.js';
 import { logger } from '../modules/logger.js';
 
@@ -194,23 +195,17 @@ const createPresetEls = [
 // overlay a title + a full-area tap zone that opens the working steps editor.
 const P2ALL = ['settings_2a', 'settings_2b', 'settings_2c'];
 const P2SLIDE = ['settings_2a', 'settings_2b'];   // pressure / flow: per-step sliders
-// settings_2a (pressure) is now the faithful pressure editor (pressure_editor.js),
-// which owns its own title / temp / chart / sliders — so the generic advEls text
-// below is scoped to 2b/2c only. The temp +/- tap zones stay on all three.
-const P2BC = ['settings_2b', 'settings_2c'];
+// settings_2a (pressure) and settings_2b (flow) are now the faithful step editor
+// (pressure_editor.js), which owns its own title / temp / chart / sliders — so
+// the generic advEls text below is scoped to 2c (Advanced) only. The temp +/-
+// and step-temp-toggle tap zones stay on the two step editors.
+const P2E = ['settings_2a', 'settings_2b'];   // the two parametric step editors
 const advEls = [
-  V(P2BC, 60, 245, { size: 50, weight: 'bold', fill: C.title, bind: (l) => `${l.profType || ''} profile: ${l.profTitle || '—'}` }),
-  // Temperature control on the baked thermometer (right side of the top card):
-  // +/- adjusts every step's temperature (the de1app simple profile has one temp).
-  V(P2BC, 2470, 235, { anchor: 'ne', size: 30, fill: C.muted, bind: () => t('Temp') }),
-  V(P2BC, 2380, 460, { anchor: 'ne', size: 46, weight: 'bold', fill: C.val, bind: (l) => `${Math.round(l.editTemp ?? 92)}°C` }),
+  V(['settings_2c'], 60, 245, { size: 50, weight: 'bold', fill: C.title, bind: (l) => `${l.profType || ''} profile: ${l.profTitle || '—'}` }),
   B(P2ALL, [2400, 185, 2560, 380], 'advTempUp'),
   B(P2ALL, [2400, 560, 2560, 745], 'advTempDown'),
-  // Tapping the thermometer body toggles per-step temperatures (pressure editor).
-  B(['settings_2a'], [2400, 380, 2560, 555], 'ppToggleTemps'),
-  // "open full editor" link (name / add / delete / advanced steps)
-  V(['settings_2b'], 60, 320, { size: 30, fill: C.val, bind: () => `✎ ${t('Open full editor')}` }),
-  B(['settings_2b'], [40, 300, 760, 375], 'openEditor'),
+  // Tapping the thermometer body toggles per-step temperatures (step editors).
+  B(P2E, [2400, 380, 2560, 555], 'ppToggleTemps'),
   // Advanced (2c): step summary + whole-area tap to open the full editor
   V(['settings_2c'], 60, 350, { size: 30, fill: C.muted, width: 900, bind: (l) => l.profSteps || '' }),
   V(['settings_2c'], 60, 300, { size: 30, fill: C.val, bind: () => `${t('Tap to edit steps')} ✎` }),
@@ -231,7 +226,7 @@ const ADV_PAGE = { Pressure: 'settings_2a', Flow: 'settings_2b', Advanced: 'sett
 
 const config = {
   imgBase: IMG,
-  pages: { settings_1: 'settings_1.png', settings_2a: 'settings_2a2.png', settings_2b: 'settings_2b.png',
+  pages: { settings_1: 'settings_1.png', settings_2a: 'settings_2a2.png', settings_2b: 'settings_2b2.png',
     settings_2c: 'settings_2c.png', settings_3: 'settings_3.png', settings_4: 'settings_4.png',
     settings_message: 'settings_message.png', settings_3_choices: 'settings_3_choices.png' },
   elements: [...tabBar, ...machineEls, ...appEls, ...presetEls, ...createPresetEls, ...advEls],
@@ -301,15 +296,16 @@ async function goto(tab) {
   if (tab === 'advanced') await loadAdvanced().catch((e) => logger.warn('adv', e));
   const pageId = tab === 'advanced' ? (live.advPage || 'settings_2c') : PAGES[tab];
   host.show(pageId); host.update(live);
-  const pressureEdit = tab === 'advanced' && live.advPage === 'settings_2a';
-  // URL: the pressure editor deep-links to /presets/profile/edit/<name>; other
-  // advanced (flow/advanced) + normal tabs keep #/settings/<tab>.
-  if (pressureEdit && hooks.onEditProfile) hooks.onEditProfile(live.profTitle);
+  // settings_2a -> PRESSURE editor, settings_2b -> FLOW editor (spec-driven).
+  const editSpec = tab === 'advanced' ? (live.advPage === 'settings_2a' ? PRESSURE_SPEC : live.advPage === 'settings_2b' ? FLOW_SPEC : null) : null;
+  // URL: the step editors deep-link to /presets/profile/edit/<name>; the Advanced
+  // (2c) editor + normal tabs keep #/settings/<tab>.
+  if (editSpec && hooks.onEditProfile) hooks.onEditProfile(live.profTitle);
   else if (hooks.onTab) hooks.onTab(curTab);
   closeSubPanel();                        // any open Skin/Language/etc. panel belongs to the old tab
   presetChrome(tab === 'presets');        // list + name field belong only on PRESETS
-  if (pressureEdit) { renderPressureEditor(host, live, saveAdv); const sl = host.page.querySelector('.adv-sliders'); if (sl) sl.style.display = 'none'; }
-  else { hidePressureEditor(host); renderAdvSliders(); }   // per-step sliders (shown only on 2b)
+  if (editSpec) { renderProfileEditor(host, live, editSpec, saveAdv); const sl = host.page.querySelector('.adv-sliders'); if (sl) sl.style.display = 'none'; }
+  else { hideProfileEditor(host); renderAdvSliders(); }
   try {
     if (tab === 'machine') await loadMachine();
     else if (tab === 'app') await loadApp();
@@ -359,8 +355,9 @@ async function loadAdvanced() {
   live.advPage = ADV_PAGE[live.profType];
   live._advProfile = structuredClone(wf?.profile || { steps: [] });   // mutable copy the sliders edit
   live.editTemp = steps[0]?.temperature ?? 92;
-  // Pressure profiles get the parametric editor: derive its simple params from steps.
+  // Pressure/Flow profiles get the parametric editor: derive simple params from steps.
   if (live.profType === 'Pressure') live._pp = parsePressure(wf?.profile || { steps: [] });
+  else if (live.profType === 'Flow') live._pp = parseFlow(wf?.profile || { steps: [] });
   setTabProfile(wf?.profile);
   live.profSteps = steps.map((s, i) => `${i + 1}. ${s.name || s.pump}  —  ${s.pump === 'flow' ? s.flow + ' mL/s' : s.pressure + ' bar'} · ${s.seconds}s · ${s.temperature}°C`).join('\n');
 }
@@ -747,9 +744,9 @@ async function createPreset(kind) {
     await api.updateWorkflow({ profile });
     live._newType = kind; live._forceType = kind;
   } catch (e) { logger.warn('newPreset', e); }
-  // Pressure -> the parametric editor (settings_2a); Flow/Advanced keep the
-  // generic step editor for now. goto('advanced') dispatches by profile type.
-  if (kind === 'Pressure') goto('advanced');
+  // Pressure/Flow -> the parametric step editor (settings_2a/2b); Advanced keeps
+  // the generic step editor. goto('advanced') dispatches by profile type.
+  if (kind === 'Pressure' || kind === 'Flow') goto('advanced');
   else openProfileEditor(() => goto('advanced'));
 }
 
@@ -840,10 +837,10 @@ const actions = {
 // Temperature +/- on the 2a/2b/2c thermometer sets every step's temperature.
 // On the pressure editor it drives the parametric temp param instead.
 function advTemp(d) {
-  if (curTab === 'advanced' && live.advPage === 'settings_2a') { ppTempAdjust(live, d); saveAdv(); return; }
+  if (curTab === 'advanced' && (live.advPage === 'settings_2a' || live.advPage === 'settings_2b')) { ppTempAdjust(live, d); saveAdv(); return; }
   if (!live._advProfile) return;
   live.editTemp = Math.min(105, Math.max(80, Math.round((live.editTemp ?? 92) + d)));
   (live._advProfile.steps || []).forEach((s) => { s.temperature = live.editTemp; });
   host.update(live); saveAdv();
 }
-function cleanup() { closeSubPanel(); removePressureEditor(host); if (host) { ['.s2-preset-scroll', '.adv-sliders', '.s2-name-input'].forEach((s) => { const el = host.page.querySelector(s); if (el) el.remove(); }); } }
+function cleanup() { closeSubPanel(); removeProfileEditor(host); if (host) { ['.s2-preset-scroll', '.adv-sliders', '.s2-name-input'].forEach((s) => { const el = host.page.querySelector(s); if (el) el.remove(); }); } }
