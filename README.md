@@ -6,6 +6,25 @@ A pixel-faithful web port of the de1app **Insight** skin
 (`:8080/api/v1`) + WebSocket (`:8080/ws/v1`). No framework, no bundler — vanilla
 ES modules + importmap, Plotly for charts.
 
+## Install in Decent.app
+
+Grab the latest bundle from [**Releases**](https://github.com/decentespresso/insight-js/releases/latest)
+(`insight-<version>.zip`) and install it one of these ways:
+
+- **In the app:** Settings → skins → *Install from .zip…* and pick the downloaded zip.
+- **Via the REST API:**
+  ```bash
+  curl -X POST localhost:8080/api/v1/webui/skins/install/github-release \
+    -H 'Content-Type: application/json' \
+    -d '{"repo":"decentespresso/insight-js"}'
+  ```
+
+Once [tadelv/reaprime#428](https://github.com/tadelv/reaprime/pull/428) merges,
+Decent.app will **auto-download** Insight on startup like the other bundled skins.
+
+The skin is packaged as a plain static bundle — `index.html` + `manifest.json` at
+the archive root, plus `src/` and `assets/` — per reaprime's `doc/Skins.md`.
+
 ## Run it (dev harness, hardware-free)
 
 1. **Gateway:** launch the current build **by path** — `open /Applications/Decent.app`
@@ -40,22 +59,38 @@ ES modules + importmap, Plotly for charts.
 
 ## Status
 
-**Original scope — DONE & verified in Chrome vs the simulator:** 4 brew tabs
-(flush/espresso/steam/water), zoom views, presets (profile selector), profile
-editors incl a_flow/d_flow (one `steps[]` editor covers pressure/flow/advanced),
-machine+app settings, GFC, DYE.
+Verified in Chrome against the simulator. Image-backed on the original Insight /
+default-skin 2560×1600 assets unless noted:
 
-**Faithful (image-backed):** the 4 brew screens + zoom. **Functional overlays**
-(not yet image-backed): DYE, settings, profile editor, GFC.
+- **Brew:** flush / espresso / steam / water, each with the live 3-panel chart and
+  tap-to-zoom (pressure-flow / temperature) views.
+- **Profiles:** selector + New-Preset chooser; pressure / flow / advanced editors
+  (`settings_2a/2b/2c`) with per-control sliders, a Steps page, and a Limits page.
+- **Settings:** Machine and App tabs, plus the sub-pages — Skin / Language /
+  Extensions / Firmware (GitHub firmware check + upload), a Tcl-faithful **Misc**
+  page, and the **Calibrate** flow (warning gate → 3 paginated pages, wired to
+  `/machine/settings` + `/machine/settings/advanced` + the flow multiplier).
+- **Maintenance:** descale-prep / cleaning / transport photographic pages.
+- **DYE:** describe-your-espresso pages + the Scent One aroma wheel.
+- **Screensaver** with rotating images, and an **Insight Dark** theme.
+- **Deep-link routing:** every tab and sub-page has its own `#/…` URL that survives
+  a refresh (e.g. `#/settings/machine/calibrate/2`, `#/settings/app/misc`).
+- **i18n:** the de1app GUI translation sheet, switchable at runtime.
 
-**Remaining / enhancements:** wire the Scent One aroma wheel into DYE
-(`scentone_*.avif` already converted); Insight Dark theme (dark colour map is in
-the coordinate JSON; needs the dark image set + toggle); make the 4 form pages
-image-backed for full fidelity; steam/water running-page mini-graphs;
-font/position fine-calibration against `./unde1plus-arm64.sh`.
+Still a clean HTML overlay (not image-backed): the Graphical Flow Calibrator (GFC).
 
-Deploy (later): GitHub Action on tag → build, write `skin-manifest.json`, zip,
-attach to a Release; install via `POST /api/v1/webui/skins/install/github-release`.
+## Releases & packaging
+
+Tagging `v*` runs [`.github/workflows/release.yml`](.github/workflows/release.yml):
+it writes `manifest.json` with the tag version, zips the static bundle with
+`index.html` at the archive root, and publishes a GitHub Release with the
+`insight-<tag>.zip` asset — the format reaprime installs (see
+[doc/Skins.md](https://github.com/tadelv/reaprime/blob/main/doc/Skins.md)).
+
+```bash
+git tag -a v0.1.0 -m "Insight skin v0.1.0"
+git push origin v0.1.0
+```
 
 ## License
 
