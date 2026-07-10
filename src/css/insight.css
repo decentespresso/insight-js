@@ -190,8 +190,8 @@ html, body { margin: 0; background: #000; color: var(--ins-ink); overflow: hidde
 .ovar-scroll::-webkit-scrollbar-track { background: transparent; }
 .ovar-scroll::-webkit-scrollbar-thumb { background: #f7f5ff; border-radius: 50px; border: 16px solid transparent; background-clip: padding-box; min-height: 140px; box-shadow: inset 0 0 0 3px #b4b6cb; }
 /* dialog content injected into the white panel of settings_message.png (2560-space) */
-.s2-dialog-content { position: absolute; left: 320px; top: 480px; width: 1920px; height: 690px; overflow-y: auto;
-  padding: 0 40px; font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
+.s2-dialog-content { position: absolute; left: 320px; top: 430px; width: 1920px; height: 750px; overflow-y: auto;
+  padding: 0 40px 30px; font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
 
 /* ---- Finger-friendly scrollbars ---- */
 /* This skin runs on the DE1's touchscreen, so scroll thumbs must be wide enough
@@ -273,6 +273,65 @@ html, body { margin: 0; background: #000; color: var(--ins-ink); overflow: hidde
 .stage-g .pp-thumb { background: #c8e7d5; }
 .stage-t .pp-thumb { background: #efdec0; }
 .stage-r .pp-thumb { background: #edcecb; }
+.stage-p .pp-thumb { background: #c1c4e3; }   /* periwinkle — matches the baked Ok/Cancel buttons */
+
+/* ===== ADVANCED profile editor (Tcl settings_2c Steps / settings_2c2 Limits) === */
+.adv-editor { position: absolute; inset: 0; width: 2560px; height: 1600px; pointer-events: none;
+  font-family: 'InsightUI', Helvetica, Arial, sans-serif; --pp-thumb: 140px; }
+.adv-steps, .adv-limits { position: absolute; inset: 0; }
+.adv-heading { position: absolute; font-size: 44px; font-weight: 700; color: #4e85f4; white-space: nowrap; }
+.adv-cardtitle { position: absolute; font-size: 42px; font-weight: 700; color: #7f879a; white-space: nowrap; }
+.adv-sublabel { position: absolute; font-size: 30px; color: #7f879a; white-space: nowrap; }
+/* Tcl anchors these labels/values at "center" — i.e. the coordinate is their
+   vertical MIDDLE, so the grey label + blue number straddle the divider line. */
+.adv-sublabel.c { transform: translate(-50%, -50%); text-align: center; }
+.adv-sublabel.b { font-weight: 700; }               /* bold field labels (Title / Message) */
+.adv-value { position: absolute; font-size: 40px; font-weight: 700; color: #4e85f4; white-space: nowrap; }
+.adv-value.c { transform: translate(-50%, -50%); text-align: center; }
+/* the step list — styled like the presets list (settings_1), incl. finger scrollbar */
+.adv-list { position: absolute; left: 60px; top: 300px; width: 645px; height: 470px; overflow-y: auto;
+  pointer-events: auto; background: #fbfaff; border-radius: 8px; padding: 6px 8px;
+  font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
+.adv-listrow { display: block; width: 100%; text-align: left; font-size: 40px; color: #2d3046;
+  padding: 8px 20px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 10px; }
+.adv-listrow:hover { background: #f0f1fa; }
+.adv-listrow.sel { background: #c7cbe4; }
+.adv-list::-webkit-scrollbar { width: 130px; }
+.adv-list::-webkit-scrollbar-track { background: transparent; }
+.adv-list::-webkit-scrollbar-thumb { background: #f7f5ff; border-radius: 50px; border: 16px solid transparent;
+  background-clip: padding-box; min-height: 120px; box-shadow: inset 0 0 0 3px #b4b6cb; }
+.adv-input { position: absolute; height: 64px; box-sizing: border-box; border: 2px solid #cfd2e4; border-radius: 6px;
+  background: #fff; color: #4e85f4; font-size: 38px; padding: 0 12px; pointer-events: auto;
+  font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
+.adv-chart { position: absolute; left: 8px; top: 960px; width: 920px; height: 450px; pointer-events: none; }
+.adv-zone { position: absolute; pointer-events: auto; cursor: pointer; }
+/* keep-hot daily schedule (settings_3): time sliders + Start/End/Now labels */
+.mach-sched { position: absolute; inset: 0; pointer-events: none; --pp-thumb: 140px; }
+.mach-sched .pp-slider { pointer-events: auto; }
+.mach-sched-now, .mach-sched-lbl { position: absolute; font-size: 34px; color: #7f879a; white-space: nowrap;
+  font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
+/* App tab: Bluetooth device list — machine column (left) + scale/other column (right) */
+.app-devices { position: absolute; inset: 0; pointer-events: none; font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
+.app-dev-col { position: absolute; top: 1085px; width: 545px; }
+.app-dev-title { font-size: 30px; font-weight: 700; color: #7f879a; margin-bottom: 6px; }
+.app-dev-none { font-size: 30px; color: #a9adbc; margin-top: 8px; }
+.app-dev-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; pointer-events: auto; padding: 12px 0; }
+.app-dev-name { font-size: 34px; color: #4c4f5c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+.app-dev-state { font-size: 24px; color: #7f879a; }
+.app-dev-btn { flex: 0 0 auto; border: none; border-radius: 30px; padding: 12px 30px; font-size: 28px; font-weight: 700;
+  cursor: pointer; background: #4e85f4; color: #fff; font-family: inherit; }
+.app-dev-btn.on { background: #dfe1ec; color: #5a5d75; }   /* connected -> grey "Disconnect" */
+.app-dev-btn:disabled { opacity: .6; }
+/* App tab: screen-brightness slider */
+.app-bright { position: absolute; inset: 0; pointer-events: none; --pp-thumb: 140px; }
+.app-bright .pp-slider { pointer-events: auto; }
+/* move-on-if toggle switch */
+.adv-toggle { position: absolute; width: 96px; height: 48px; border-radius: 24px; background: #cfd2e4; pointer-events: none; transition: background .15s; }
+.adv-toggle::after { content: ''; position: absolute; top: 5px; left: 5px; width: 38px; height: 38px; border-radius: 50%; background: #fff; transition: left .15s; }
+.adv-toggle.on { background: #4e85f4; }
+.adv-toggle.on::after { left: 53px; }
+/* limits tab value labels are left-aligned under their slider */
+.adv-limits .adv-value { color: #4e85f4; }
 
 /* ---- (legacy) flat-card settings styles, still used by other overlays ---- */
 .s2 { display: flex; flex-direction: column; height: 100%; background: #eceef7; color: #2d3046; position: relative;

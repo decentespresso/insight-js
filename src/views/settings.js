@@ -14,15 +14,18 @@ import { openGFC } from './gfc.js';
 import { openProfileEditor } from './profile_editor.js';
 import { openMaintenance } from './maintenance.js';
 import { renderProfileEditor, hideProfileEditor, removeProfileEditor, ppTempAdjust, ppToggleTempSteps, PRESSURE_SPEC, FLOW_SPEC } from './pressure_editor.js';
+import { renderAdvancedEditor, hideAdvancedEditor, removeAdvancedEditor } from './advanced_editor.js';
 import { parsePressure } from '../config/pressure_profile.js';
 import { parseFlow } from '../config/flow_profile.js';
-import { setLang, currentLangName, LANGUAGES, t } from '../modules/i18n.js';
+import { setLang, currentLangName, currentLangCode, LANGUAGES, t } from '../modules/i18n.js';
 import { logger } from '../modules/logger.js';
 
 const IMG = 'assets/insight/';
 // Card titles in the Tcl settings pages are a soft grey-blue (not navy); rows a
 // medium grey. Colours sampled from the sstcl screenshots.
-const C = { title: '#646a7c', label: '#4c4f5c', val: '#4979e9', dark: '#2d3046', tabOff: '#7e8496', muted: '#7e8496', na: '#b06a6a' };
+// Grey text is Tcl's #7f879a; blue values are #4e85f4 — matching the Tcl skin
+// (and the advanced editor's CSS), so all settings pages share one palette.
+const C = { title: '#7f879a', label: '#7f879a', val: '#4e85f4', dark: '#2d3046', tabOff: '#7e8496', muted: '#7f879a', na: '#b06a6a' };
 const FONT = "'InsightUI', Helvetica, Arial, sans-serif";
 
 // element helpers (mirror the brew configs)
@@ -66,74 +69,89 @@ const tabBar = [
   // Ok label centered on the baked button (1254–1376 in 2560-space => ~1315).
   V(MODAL, 1280, 300, { anchor: 'center', size: 72, weight: 'bold', fill: C.dark, bind: (l) => l.dialogTitle || '' }),
   B(MODAL, [1030, 1240, 1560, 1390], 'dialogOk'),
-  V(MODAL, 1293, 1316, { anchor: 'center', size: 52, weight: 'bold', fill: '#fafbff', bind: () => t('Ok') }),
+  V(MODAL, 1293, 1308, { anchor: 'center', size: 52, weight: 'bold', fill: '#fafbff', bind: () => t('Ok') }),
 ];
 
 // ---- MACHINE (settings_3) -------------------------------------------------
 const P3 = ['settings_3'];
 const row3 = (y, label, valBind) => [
   V(P3, 60, y, { size: 40, fill: C.label, bind: () => t(label) }),
-  V(P3, 1120, y, { anchor: 'ne', size: 40, fill: C.dark, bind: valBind }),
+  V(P3, 1120, y, { anchor: 'ne', size: 40, fill: C.title, bind: valBind }),   // counts in Tcl's grey, not dark ink
 ];
 const machineEls = [
-  // Counter card
-  V(P3, 55, 245, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Counter') }),
-  ...row3(345, 'Espresso', (l) => String(l.cEspresso ?? '—')),
-  ...row3(405, 'Steam', () => '—'),
-  ...row3(465, 'Hot water', () => '—'),
-  // Version card
-  V(P3, 55, 560, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Version') }),
-  V(P3, 55, 640, { size: 36, fill: C.muted, bind: (l) => l.version || '—' }),
-  // Energy saver card
+  // Counter card (Tcl: title 55,220; rows Espresso/Steam/Hot water 310/370/430;
+  // counts right-aligned at the card's right edge)
+  V(P3, 55, 220, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Counter') }),
+  ...row3(310, 'Espresso', (l) => String(l.cEspresso ?? '—')),
+  ...row3(370, 'Steam', () => '—'),
+  ...row3(430, 'Hot water', () => '—'),
+  // Version card (Tcl: title 55,544; version string 55,616)
+  V(P3, 55, 544, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Version') }),
+  V(P3, 55, 616, { size: 36, fill: C.muted, bind: (l) => l.version || '—' }),
+  // Energy saver card (reaprime equivalent of the Tcl scheduler; fills the 3rd left box)
   V(P3, 55, 775, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Energy saver') }),
   V(P3, 60, 880, { size: 40, fill: C.label, bind: (l) => `${t('Cool down after:')} ${l.coolMin ?? 30} ${t('min')}` }),
   B(P3, [40, 850, 1140, 960], 'editCool'),
-  V(P3, 60, 1040, { size: 44, fill: C.val, bind: (l) => (l.keepHot ? `● ${t('Keep hot')}: ${t('ON')}` : `○ ${t('Keep hot')}: ${t('OFF')}`) }),
+  V(P3, 180, 1040, { size: 44, fill: C.val, bind: () => t('Keep hot') }),   // switch drawn to its left in renderKeepHotSched
   B(P3, [40, 1010, 1140, 1110], 'toggleKeepHot'),
-  // Maintenance card — labels overlaid on the baked icon buttons
-  V(P3, 1310, 245, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Maintenance') }),
-  V(P3, 2510, 250, { anchor: 'ne', size: 38, fill: C.val, bind: () => `[${t('Read Manual')}: ${t('Cleaning')}]` }),
-  V(P3, 1720, 435, { anchor: 'center', size: 48, fill: C.dark, bind: () => t('Clean') }),
-  V(P3, 2330, 435, { anchor: 'center', size: 48, fill: C.dark, bind: () => t('Descale') }),
-  V(P3, 1720, 620, { anchor: 'center', size: 48, fill: C.dark, bind: () => t('Calibrate') }),
-  V(P3, 2330, 620, { anchor: 'center', size: 48, fill: '#9aa0b0', bind: () => t('Transport') }),
-  B(P3, [1325, 360, 1910, 510], 'clean'),
-  B(P3, [1945, 360, 2535, 510], 'descale'),
-  B(P3, [1325, 545, 1910, 695], 'calibrate'),
-  // Firmware card (tap the button to open the firmware panel)
-  V(P3, 1310, 770, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Firmware') }),
-  V(P3, 1780, 915, { anchor: 'center', size: 48, fill: C.dark, bind: (l) => `v${l.fw ?? '?'} · ${t('Update')}…` }),
-  B(P3, [1325, 845, 2535, 985], 'firmware'),
-  // Water level card
-  V(P3, 1310, 1090, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Water level') }),
-  V(P3, 1310, 1180, { size: 36, fill: C.na, bind: () => 'Not reported by this gateway build' }),
+  // Maintenance card — labels overlaid on the baked icon buttons (Tcl: title 1304,220;
+  // Read-Manual link 2520,220 ne; button labels centred at 1640/2290 x 420/610, bold)
+  V(P3, 1304, 220, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Maintenance') }),
+  V(P3, 2520, 220, { anchor: 'ne', size: 38, fill: C.val, bind: () => `[${t('Read Manual')}: ${t('Cleaning')}]` }),
+  B(P3, [1300, 210, 2560, 280], 'readManual'),   // opens the language-specific quickstart manual
+  V(P3, 1640, 420, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('Clean') }),
+  V(P3, 2290, 420, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('Descale') }),
+  V(P3, 1640, 610, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('Calibrate') }),
+  V(P3, 2290, 610, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('Transport') }),
+  B(P3, [1280, 310, 1900, 510], 'clean'),
+  B(P3, [1910, 310, 2540, 510], 'descale'),
+  B(P3, [1280, 516, 1900, 720], 'calibrate'),
+  B(P3, [1910, 516, 2540, 720], 'transport'),
+  // Firmware card (Tcl: title 1304,750; button label centred at 1960,926; button 1280,850..2540,1020)
+  V(P3, 1304, 750, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Firmware') }),
+  V(P3, 1910, 926, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: (l) => (l.githubFw != null && parseInt(l.fw, 10) === l.githubFw ? t('Firmware up to date') : `v${l.fw ?? '?'} · ${t('Update')}…`) }),
+  B(P3, [1280, 850, 2540, 1020], 'firmware'),
+  // Water level card (Tcl: title 1304,1080)
+  V(P3, 1304, 1080, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Water level') }),
+  V(P3, 1304, 1170, { size: 36, fill: C.na, bind: () => 'Not reported by this gateway build' }),
 ];
 
 // ---- APP (settings_4) -----------------------------------------------------
 const P4 = ['settings_4'];
+// Coordinates match the Tcl settings_4 page exactly (our settings_4.avif IS that
+// asset). Grey titles are #7f879a (C.title); the button labels overlaid on the
+// baked lavender buttons are white + bold, like Tcl (Helv_10_bold #FFFFFF).
 const appEls = [
-  V(P4, 55, 245, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Update app') }),
-  V(P4, 55, 330, { size: 36, fill: C.muted, bind: (l) => l.appVer || 'checking…' }),
-  B(P4, [40, 400, 1140, 520], 'appUpdate'),
-  V(P4, 55, 560, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Screen brightness') }),
-  V(P4, 60, 660, { size: 40, fill: C.val, bind: (l) => `${t('App')}: ${l.brightness ?? 100}%` }),
-  B(P4, [40, 630, 1140, 740], 'editBrightness'),
-  V(P4, 55, 900, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Connect') }),
-  V(P4, 60, 1000, { size: 36, fill: C.dark, bind: (l) => l.devs || 'no devices' }),
-  B(P4, [40, 960, 1140, 1120], 'searchDevices'),
-  // right column buttons (Skin / Language / Misc / Extensions) overlaid on baked frames
-  V(P4, 1720, 435, { anchor: 'center', size: 48, fill: C.dark, bind: () => t('Skin') }),
-  V(P4, 2330, 435, { anchor: 'center', size: 48, fill: C.dark, bind: () => t('Language') }),
-  V(P4, 1720, 620, { anchor: 'center', size: 48, fill: C.dark, bind: () => t('Misc') }),
-  V(P4, 2330, 620, { anchor: 'center', size: 48, fill: C.dark, bind: (l) => `${t('Extensions')} (${l.nPlugins ?? 0})` }),
-  B(P4, [1325, 360, 1910, 510], 'skinPicker'),
-  B(P4, [1945, 360, 2535, 510], 'langPicker'),
-  B(P4, [1325, 545, 1910, 695], 'misc'),
-  B(P4, [1945, 545, 2535, 695], 'extPicker'),
-  V(P4, 1310, 770, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Documentation') }),
-  V(P4, 1780, 915, { anchor: 'center', size: 48, fill: C.dark, bind: () => t('Quickstart guide') }),
-  B(P4, [1325, 845, 2535, 985], 'docs'),
-  V(P4, 1810, 1230, { anchor: 'center', size: 48, fill: C.dark, bind: () => t('Exit') }),
+  // Update App card (title 50,220; version top-right 1240,226; button label centred 700,416)
+  V(P4, 50, 220, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Update app') }),
+  V(P4, 1240, 226, { anchor: 'ne', size: 36, fill: C.muted, bind: (l) => l.appVer || 'checking…' }),
+  V(P4, 700, 416, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: (l) => l.appUpdateLabel || t('Check for updates') }),
+  B(P4, [20, 320, 1250, 526], 'appUpdate'),
+  // Screen brightness card (title 50,566; slider 50,660 injected below; value 50,800)
+  V(P4, 50, 566, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Screen brightness') }),
+  V(P4, 50, 800, { size: 34, fill: C.muted, bind: (l) => `${t('App:')} ${l.brightness ?? 100}%` }),
+  // Connect card (title 55,970; Search button 650,960..1260,1070; devices listed below)
+  V(P4, 55, 970, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Connect') }),
+  V(P4, 955, 1016, { anchor: 'center', size: 40, weight: 'bold', fill: '#ffffff', bind: () => t('Search') }),
+  B(P4, [650, 960, 1260, 1070], 'searchDevices'),
+  // device columns (Espresso machine | Scale) are injected by renderAppDevices()
+  // right column: Skin / Language / Misc / Extensions — white bold labels on the baked buttons
+  V(P4, 1656, 416, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('Skin') }),
+  V(P4, 2290, 416, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('Language') }),
+  V(P4, 1656, 616, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('Misc') }),
+  V(P4, 2290, 616, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('Extensions') }),
+  B(P4, [1290, 306, 1900, 510], 'skinPicker'),
+  B(P4, [1910, 306, 2530, 510], 'langPicker'),
+  B(P4, [1290, 520, 1900, 720], 'misc'),
+  B(P4, [1910, 520, 2530, 720], 'extPicker'),
+  // Documentation card (title 1310,820; Quickstart button spans the whole box)
+  V(P4, 1310, 820, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Documentation') }),
+  V(P4, 1900, 980, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('Quickstart guide') }),
+  B(P4, [1290, 860, 2550, 1100], 'docs'),
+  // Exit app card (title 1310,1130; Exit button spans the whole box)
+  V(P4, 1310, 1130, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Exit app') }),
+  V(P4, 1900, 1290, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('Exit') }),
+  B(P4, [1290, 1170, 2550, 1400], 'exitApp'),
 ];
 
 // ---- PRESETS (settings_1) -------------------------------------------------
@@ -200,16 +218,17 @@ const P2SLIDE = ['settings_2a', 'settings_2b'];   // pressure / flow: per-step s
 // the generic advEls text below is scoped to 2c (Advanced) only. The temp +/-
 // and step-temp-toggle tap zones stay on the two step editors.
 const P2E = ['settings_2a', 'settings_2b'];   // the two parametric step editors
+const P2C = ['settings_2c', 'settings_2c2'];  // the advanced editor's two sub-tabs
 const advEls = [
-  V(['settings_2c'], 60, 245, { size: 50, weight: 'bold', fill: C.title, bind: (l) => `${l.profType || ''} profile: ${l.profTitle || '—'}` }),
-  B(P2ALL, [2400, 185, 2560, 380], 'advTempUp'),
-  B(P2ALL, [2400, 560, 2560, 745], 'advTempDown'),
-  // Tapping the thermometer body toggles per-step temperatures (step editors).
+  // pressure/flow step editors: baked thermometer +/- and the per-step-temp toggle
+  B(P2E, [2400, 185, 2560, 380], 'advTempUp'),
+  B(P2E, [2400, 560, 2560, 745], 'advTempDown'),
   B(P2E, [2400, 380, 2560, 555], 'ppToggleTemps'),
-  // Advanced (2c): step summary + whole-area tap to open the full editor
-  V(['settings_2c'], 60, 350, { size: 30, fill: C.muted, width: 900, bind: (l) => l.profSteps || '' }),
-  V(['settings_2c'], 60, 300, { size: 30, fill: C.val, bind: () => `${t('Tap to edit steps')} ✎` }),
-  B(['settings_2c'], [40, 380, 2540, 1380], 'openEditor'),
+  // Advanced editor: bottom Steps / Limits sub-tab buttons + their labels
+  V(P2C, 240, 1485, { anchor: 'center', size: 42, weight: 'bold', fill: C.title, bind: () => t('Steps') }),
+  V(P2C, 735, 1485, { anchor: 'center', size: 42, weight: 'bold', fill: C.title, bind: () => t('Limits') }),
+  B(P2C, [1, 1410, 495, 1600], 'advTabSteps'),
+  B(P2C, [496, 1410, 972, 1600], 'advTabLimits'),
 ];
 // profile type -> label + editor background page. A "simple" pressure/flow
 // profile is a (flow-pump) preinfusion followed by a body that's ALL one pump
@@ -227,7 +246,7 @@ const ADV_PAGE = { Pressure: 'settings_2a', Flow: 'settings_2b', Advanced: 'sett
 const config = {
   imgBase: IMG,
   pages: { settings_1: 'settings_1.png', settings_2a: 'settings_2a2.png', settings_2b: 'settings_2b2.png',
-    settings_2c: 'settings_2c.png', settings_3: 'settings_3.png', settings_4: 'settings_4.png',
+    settings_2c: 'settings_pages_all.png', settings_2c2: 'settings_2c2.png', settings_3: 'settings_3.png', settings_4: 'settings_4.png',
     settings_message: 'settings_message.png', settings_3_choices: 'settings_3_choices.png' },
   elements: [...tabBar, ...machineEls, ...appEls, ...presetEls, ...createPresetEls, ...advEls],
 };
@@ -296,21 +315,26 @@ async function goto(tab) {
   if (tab === 'advanced') await loadAdvanced().catch((e) => logger.warn('adv', e));
   const pageId = tab === 'advanced' ? (live.advPage || 'settings_2c') : PAGES[tab];
   host.show(pageId); host.update(live);
-  // settings_2a -> PRESSURE editor, settings_2b -> FLOW editor (spec-driven).
+  // settings_2a -> PRESSURE editor, settings_2b -> FLOW editor (spec-driven);
+  // settings_2c / settings_2c2 -> the ADVANCED step editor.
   const editSpec = tab === 'advanced' ? (live.advPage === 'settings_2a' ? PRESSURE_SPEC : live.advPage === 'settings_2b' ? FLOW_SPEC : null) : null;
-  // URL: the step editors deep-link to /presets/profile/edit/<name>; the Advanced
-  // (2c) editor + normal tabs keep #/settings/<tab>.
-  if (editSpec && hooks.onEditProfile) hooks.onEditProfile(live.profTitle);
+  const advEdit = tab === 'advanced' && (live.advPage === 'settings_2c' || live.advPage === 'settings_2c2');
+  // URL: all three step editors deep-link to /presets/profile/edit/<name>.
+  if ((editSpec || advEdit) && hooks.onEditProfile) hooks.onEditProfile(live.profTitle);
   else if (hooks.onTab) hooks.onTab(curTab);
   closeSubPanel();                        // any open Skin/Language/etc. panel belongs to the old tab
   presetChrome(tab === 'presets');        // list + name field belong only on PRESETS
-  if (editSpec) { renderProfileEditor(host, live, editSpec, saveAdv); const sl = host.page.querySelector('.adv-sliders'); if (sl) sl.style.display = 'none'; }
-  else { hideProfileEditor(host); renderAdvSliders(); }
+  if (editSpec) { renderProfileEditor(host, live, editSpec, saveAdv); hideAdvancedEditor(host); const sl = host.page.querySelector('.adv-sliders'); if (sl) sl.style.display = 'none'; }
+  else if (advEdit) { renderAdvancedEditor(host, live, saveAdv); hideProfileEditor(host); const sl = host.page.querySelector('.adv-sliders'); if (sl) sl.style.display = 'none'; }
+  else { hideProfileEditor(host); hideAdvancedEditor(host); renderAdvSliders(); }
   try {
     if (tab === 'machine') await loadMachine();
     else if (tab === 'app') await loadApp();
     else if (tab === 'presets') await loadPresets();
   } catch (e) { logger.warn('settings load', e); }
+  renderKeepHotSched();      // show the keep-hot sliders on MACHINE only, hide elsewhere
+  renderAppDevices();        // show the Bluetooth device list on APP only, hide elsewhere
+  renderAppBrightness();     // and the brightness slider
   host.update(live);
 }
 
@@ -321,9 +345,203 @@ async function loadMachine() {
   live.cEspresso = (ids || []).length;
   live.version = `API v${info.version ?? '?'} · model ${info.model ?? '?'} · ${info.serialNumber ?? '?'} · GHC ${info.GHC ? 'yes' : 'no'}`;
   live.fw = info.version ?? '?';
+  // Compare against GitHub's latest so the Firmware button can show "up to date".
+  githubFwVersion().then((gh) => { live.githubFw = gh; if (host && curTab === 'machine') host.update(live); }).catch(() => {});
   live.coolMin = presence.sleepTimeoutMinutes ?? 30;
   live.keepHot = presence.userPresenceEnabled === false;
   live._presence = presence;
+  loadSched();
+  renderKeepHotSched();
+}
+
+// ---- Read Manual: language-specific quickstart page (Tcl web_browser links) ----
+function manualUrl() {
+  const map = {
+    de: 'quickstart_de/quickstart_de.html#pf22', fr: 'quickstart_fr/quickstart_fr.html#pf21',
+    es: 'quickstart_es/quickstart_es.html#pf21', kr: 'quickstart_kr/quickstart_kr.html#pf21',
+    'zh-hans': 'quickstart_zh/quickstart_zh.html#pf21',
+  };
+  return 'https://decentespresso.com/doc/' + (map[currentLangCode()] || 'quickstart/quickstart.html#pf21');
+}
+// Documentation "Quickstart Guide" link — language-specific directory (Tcl settings_4).
+function quickstartUrl() {
+  const map = { de: 'quickstart_de', fr: 'quickstart_fr', es: 'quickstart_es', kr: 'quickstart_kr', 'zh-hans': 'quickstart_zh' };
+  return 'https://decentespresso.com/doc/' + (map[currentLangCode()] || 'quickstart') + '/';
+}
+
+// ---- Keep-hot daily schedule (Tcl scheduler): two time sliders that appear when
+// "Keep hot" is on. reaprime has no wake/sleep scheduler, so the times persist
+// client-side. Values are minutes-of-day (0..1439); Tcl uses seconds (step 60).
+const SCHED_KEY = 'insight_keephot_sched';
+const is12h = () => { try { return new Intl.DateTimeFormat([], { hour: 'numeric' }).resolvedOptions().hour12 ?? false; } catch (e) { return false; } };
+const fmtHM = (min) => {
+  const m = Math.max(0, Math.min(1439, Math.round(min)));
+  let h = Math.floor(m / 60); const mm = String(m % 60).padStart(2, '0');
+  if (is12h()) { const mer = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return `${h}:${mm} ${mer}`; }
+  return `${String(h).padStart(2, '0')}:${mm}`;
+};
+function loadSched() {
+  try { const s = JSON.parse(localStorage.getItem(SCHED_KEY) || '{}'); live.schedWake = s.wake ?? 360; live.schedSleep = s.sleep ?? 1320; }
+  catch (e) { live.schedWake = 360; live.schedSleep = 1320; }
+}
+function saveSched() { try { localStorage.setItem(SCHED_KEY, JSON.stringify({ wake: live.schedWake, sleep: live.schedSleep })); } catch (e) { /* */ } }
+let schedEls = null;
+function renderKeepHotSched() {
+  if (!host) return;
+  let box = host.page.querySelector('.mach-sched');
+  if (curTab !== 'machine') { if (box) box.style.display = 'none'; return; }
+  if (!box) {
+    box = document.createElement('div'); box.className = 'mach-sched'; host.page.appendChild(box);
+    const add = (cls, css) => { const d = document.createElement('div'); d.className = cls; if (css) d.style.cssText = css; box.appendChild(d); return d; };
+    // on/off switch left of "Keep hot" — same toggle graphic as the advanced editor
+    const toggle = add('adv-toggle', 'left:50px;top:1036px');
+    const now = add('mach-sched-now', 'left:60px;top:1050px;width:1180px;text-align:right');
+    const slider = (x, key) => {
+      const sl = document.createElement('div'); sl.className = 'pp-slider h stage-p';   // periwinkle thumb (Ok/Cancel colour)
+      sl.style.cssText = `left:${x}px;top:1140px;width:560px;height:118px`;
+      const thumb = document.createElement('div'); thumb.className = 'pp-thumb'; sl.appendChild(thumb); box.appendChild(sl);
+      attachSchedDrag(sl, key);
+      return { sl, thumb };
+    };
+    const start = slider(60, 'schedWake');
+    const end = slider(650, 'schedSleep');
+    // tapping a time opens the full-screen time editor (colon entry, +AM/PM in 12h)
+    const startLbl = add('mach-sched-lbl', 'left:60px;top:1272px;pointer-events:auto;cursor:pointer');
+    const endLbl = add('mach-sched-lbl', 'left:650px;top:1272px;pointer-events:auto;cursor:pointer');
+    startLbl.addEventListener('click', () => editSchedTime('Start', 'schedWake'));
+    endLbl.addEventListener('click', () => editSchedTime('End', 'schedSleep'));
+    schedEls = { box, toggle, now, start, end, startLbl, endLbl };
+  }
+  box.style.display = 'block';
+  schedEls.toggle.classList.toggle('on', !!live.keepHot);
+  const vis = live.keepHot ? 'block' : 'none';     // the schedule sliders/times show only when Keep hot is on
+  [schedEls.now, schedEls.start.sl, schedEls.end.sl, schedEls.startLbl, schedEls.endLbl].forEach((e) => { e.style.display = vis; });
+  if (live.keepHot) refreshSched();
+}
+function editSchedTime(title, key) {
+  import('./numpad.js').then(({ openTimeEditor }) => openTimeEditor({
+    title: t(title), minutes: live[key] ?? 0, ampm: is12h(),
+    onOk: (v) => { live[key] = Math.max(0, Math.min(1439, v)); saveSched(); refreshSched(); },
+  }));
+}
+
+// ---- App tab: interactive Bluetooth device list (Tcl Connect: machine on the
+// left, scale/other devices on the right). Each row connects/disconnects. ----
+let appDevBusy = false;
+// Live scale weight (streamed) shown after "connected" for a connected scale.
+let scaleWeight = null, scaleSub = null;
+const scaleStateEls = [];   // the state <div>s of connected scales, updated live
+const scaleStateText = () => `${t('connected')} : ${scaleWeight != null ? scaleWeight.toFixed(1) : '—'} g`;
+function ensureScaleSub() {
+  if (scaleSub) return;
+  scaleSub = api.connectScale((d) => { if (typeof d.weight === 'number') { scaleWeight = d.weight; for (const el of scaleStateEls) el.textContent = scaleStateText(); } });
+}
+function renderAppDevices() {
+  if (!host) return;
+  let box = host.page.querySelector('.app-devices');
+  if (curTab !== 'app') { if (box) box.style.display = 'none'; return; }
+  if (!box) { box = document.createElement('div'); box.className = 'app-devices'; host.page.appendChild(box); }
+  box.style.display = 'block';
+  box.innerHTML = '';
+  scaleStateEls.length = 0;
+  ensureScaleSub();          // start streaming weight so connected scales can show it
+  const devs = live._devices || [];
+  const column = (x, title, list) => {
+    const col = document.createElement('div'); col.className = 'app-dev-col'; col.style.left = x + 'px';
+    const h = document.createElement('div'); h.className = 'app-dev-title'; h.textContent = t(title); col.appendChild(h);
+    if (!list.length) { const e = document.createElement('div'); e.className = 'app-dev-none'; e.textContent = t('none found'); col.appendChild(e); }
+    list.forEach((d) => {
+      const row = document.createElement('div'); row.className = 'app-dev-row';
+      const info = document.createElement('div');
+      const nm = document.createElement('div'); nm.className = 'app-dev-name'; nm.textContent = d.name || d.id;
+      const st = document.createElement('div'); st.className = 'app-dev-state';
+      const connected = d.state === 'connected';
+      if (connected && d.type === 'scale') { st.textContent = scaleStateText(); scaleStateEls.push(st); }   // live weight
+      else st.textContent = t(d.state || '');
+      info.appendChild(nm); info.appendChild(st); row.appendChild(info);
+      const btn = document.createElement('button'); btn.className = 'app-dev-btn' + (connected ? ' on' : '');
+      btn.textContent = connected ? t('Disconnect') : t('Connect');
+      btn.addEventListener('click', () => toggleDevice(d, btn));
+      row.appendChild(btn);
+      col.appendChild(row);
+    });
+    box.appendChild(col);
+  };
+  column(60, 'Espresso machine', devs.filter((d) => d.type === 'machine'));
+  column(680, 'Scale', devs.filter((d) => d.type !== 'machine'));
+}
+function toggleDevice(d, btn) {
+  if (appDevBusy) return; appDevBusy = true;
+  btn.disabled = true; btn.textContent = '…';
+  const connecting = d.state !== 'connected';
+  // Only one scale and one DE1 may be connected at a time. Before connecting a
+  // device, disconnect any already-connected device of the SAME kind (by type) —
+  // being connected to two scales or two machines is an error condition.
+  const others = connecting ? (live._devices || []).filter((x) => x.type === d.type && x.state === 'connected' && x.id !== d.id) : [];
+  const chain = others.reduce((p, o) => p.then(() => api.disconnectDevice(o.id).catch(() => {})), Promise.resolve());
+  chain.then(() => (connecting ? api.connectDevice(d.id) : api.disconnectDevice(d.id)))
+    .catch((e) => logger.warn('device toggle', e))
+    .finally(() => { appDevBusy = false; setTimeout(refreshAppDevices, 700); });
+}
+async function refreshAppDevices() {
+  if (!host) return;
+  live._devices = await api.getDevices().catch(() => live._devices || []);
+  renderAppDevices();
+}
+
+// ---- App tab: screen-brightness slider (Tcl settings_4 scale at 50,660) ----
+let brightEls = null;
+function renderAppBrightness() {
+  if (!host) return;
+  let box = host.page.querySelector('.app-bright');
+  if (curTab !== 'app') { if (box) box.style.display = 'none'; return; }
+  if (!box) {
+    box = document.createElement('div'); box.className = 'app-bright'; host.page.appendChild(box);
+    const sl = document.createElement('div'); sl.className = 'pp-slider h stage-p';
+    sl.style.cssText = 'left:50px;top:660px;width:1170px;height:118px';
+    const thumb = document.createElement('div'); thumb.className = 'pp-thumb'; sl.appendChild(thumb); box.appendChild(sl);
+    const set = (ev) => {
+      const r = sl.getBoundingClientRect();
+      const frac = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+      live.brightness = Math.round(frac * 100);
+      refreshBright(); host.update(live); api.setBrightness(live.brightness).catch(() => {});
+    };
+    let drag = false;
+    sl.addEventListener('pointerdown', (ev) => { drag = true; sl.setPointerCapture?.(ev.pointerId); set(ev); ev.preventDefault(); });
+    sl.addEventListener('pointermove', (ev) => { if (drag) set(ev); });
+    const up = (ev) => { drag = false; try { sl.releasePointerCapture?.(ev.pointerId); } catch (e) { /* */ } };
+    sl.addEventListener('pointerup', up); sl.addEventListener('pointercancel', up);
+    brightEls = { box, sl, thumb };
+  }
+  box.style.display = 'block';
+  refreshBright();
+}
+function refreshBright() {
+  if (!brightEls) return;
+  const v = Math.max(0, Math.min(100, live.brightness ?? 100));
+  brightEls.thumb.style.left = `calc(${v / 100} * (100% - var(--pp-thumb)))`;
+}
+function attachSchedDrag(sl, key) {
+  const set = (ev) => {
+    const r = sl.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+    live[key] = Math.round(frac * 1439);
+    saveSched(); refreshSched();
+  };
+  let drag = false;
+  sl.addEventListener('pointerdown', (ev) => { drag = true; sl.setPointerCapture?.(ev.pointerId); set(ev); ev.preventDefault(); });
+  sl.addEventListener('pointermove', (ev) => { if (drag) set(ev); });
+  const up = (ev) => { drag = false; try { sl.releasePointerCapture?.(ev.pointerId); } catch (e) { /* */ } };
+  sl.addEventListener('pointerup', up); sl.addEventListener('pointercancel', up);
+}
+function refreshSched() {
+  if (!schedEls) return;
+  const put = (thumb, min) => { thumb.style.left = `calc(${min / 1439} * (100% - var(--pp-thumb)))`; };
+  put(schedEls.start.thumb, live.schedWake); put(schedEls.end.thumb, live.schedSleep);
+  schedEls.startLbl.textContent = `${t('Start')} ${fmtHM(live.schedWake)}`;
+  schedEls.endLbl.textContent = `${t('End')} ${fmtHM(live.schedSleep)}`;
+  const d = new Date();
+  schedEls.now.textContent = `${t('Now')} ${fmtHM(d.getHours() * 60 + d.getMinutes())}`;
 }
 async function loadApp() {
   const [devices, display, plugins, info] = await Promise.all([
@@ -331,8 +549,10 @@ async function loadApp() {
   ]);
   live.brightness = typeof display.brightness === 'number' ? display.brightness : 100;
   live.nPlugins = (plugins || []).length;
-  live.devs = (devices || []).map((d) => `${d.name || d.id} (${d.state})`).join('   ·   ') || 'no devices';
+  live._devices = devices || [];
   live.appVer = info.fullVersion ? `Decent.app ${info.fullVersion}` : 'version unknown';
+  renderAppDevices();
+  renderAppBrightness();
 }
 async function loadPresets() {
   const [rows, wf] = await Promise.all([api.getProfiles('?includeHidden=true').catch(() => []), api.getWorkflow().catch(() => ({}))]);
@@ -358,6 +578,7 @@ async function loadAdvanced() {
   // Pressure/Flow profiles get the parametric editor: derive simple params from steps.
   if (live.profType === 'Pressure') live._pp = parsePressure(wf?.profile || { steps: [] });
   else if (live.profType === 'Flow') live._pp = parseFlow(wf?.profile || { steps: [] });
+  else { live._advSel = 0; removeAdvancedEditor(host); }   // Advanced: rebuild the editor for this profile
   setTabProfile(wf?.profile);
   live.profSteps = steps.map((s, i) => `${i + 1}. ${s.name || s.pump}  —  ${s.pump === 'flow' ? s.flow + ' mL/s' : s.pressure + ' bar'} · ${s.seconds}s · ${s.temperature}°C`).join('\n');
 }
@@ -549,6 +770,9 @@ function subPanel(title, build) {
   live.dialogTitle = t(title);
   host.show('settings_message'); host.update(live);
   const sl = host.page.querySelector('.adv-sliders'); if (sl) sl.style.display = 'none';   // hide editor sliders behind the modal
+  const ms = host.page.querySelector('.mach-sched'); if (ms) ms.style.display = 'none';     // and the keep-hot schedule sliders
+  const ad = host.page.querySelector('.app-devices'); if (ad) ad.style.display = 'none';    // and the app device list
+  const ab = host.page.querySelector('.app-bright'); if (ab) ab.style.display = 'none';     // and the brightness slider
   const content = document.createElement('div'); content.className = 's2-dialog-content';
   host.page.appendChild(content);
   build(content);
@@ -566,7 +790,17 @@ function dialogClose() {
   host.show(r || PAGES[curTab] || 'settings_3'); host.update(live);
   presetChrome(curTab === 'presets');
   renderAdvSliders();   // restore editor sliders if we returned to 2a/2b
+  renderKeepHotSched(); // restore the keep-hot schedule sliders on MACHINE
+  renderAppDevices();   // restore the Bluetooth device list on APP
+  renderAppBrightness();
+  if (curTab === 'machine') clearMachineActionUrl();   // drop the /machine/<action> deep-link
 }
+// Deep-link helpers: each MACHINE sub-action (clean/descale/transport/calibrate/
+// firmware) owns a #/settings/machine/<action> URL so it survives a refresh.
+function machineActionUrl(name) { if (hooks.onMachineAction) hooks.onMachineAction(name); }
+function clearMachineActionUrl() { if (hooks.onMachineAction) hooks.onMachineAction(null); }
+// Route-driven trigger (called by app.js applyRoute for #/settings/machine/<action>).
+export function settingsMachineAction(name) { const fn = actions[name]; if (fn) fn(); }
 const spEl = (tag, cls, txt) => { const n = document.createElement(tag); if (cls) n.className = cls; if (txt != null) n.textContent = txt; return n; };
 
 async function skinPanel(body) {
@@ -584,10 +818,6 @@ async function skinPanel(body) {
       .catch((e) => { logger.warn('setSkin', e); toast('Set skin failed'); }));
     body.appendChild(row);
   });
-  const upd = spEl('button', 's2-sp-btn grey', 'Update skins from source');
-  upd.addEventListener('click', () => { toast('Updating…'); api.updateSkins().then((r) => toast(r.ok ? 'Skins updated' : 'Update failed')).catch(() => toast('Update failed')); });
-  body.appendChild(upd);
-  body.appendChild(spEl('p', 's2-sp-sub', 'reaprime /webui/skins — switching sets the gateway default skin (takes effect on the tablet).'));
 }
 // DE1 firmware lives as a single de1plus/fw/bootfwupdate.dat; its version is a
 // little-endian u32 at byte offset 8 of the file header (de1app firmware_file_spec:
@@ -605,23 +835,25 @@ function firmwarePanel(body) {
   body.appendChild(spEl('p', 's2-sp-name', `Current machine firmware: v${live.fw ?? '?'}`));
 
   // --- GitHub check + auto download/upload (John's todo) ---
-  const ghRow = spEl('div'); ghRow.style.margin = '10px 0 24px';
-  const checkBtn = spEl('button', 's2-sp-btn grey', 'Check GitHub for newer firmware');
+  const ghRow = spEl('div'); ghRow.style.margin = '8px 0 14px';
   const result = spEl('p', 's2-sp-sub', ''); result.style.margin = '14px 0';
-  const dlBtn = spEl('button', 's2-sp-btn', 'Download newest & upload'); dlBtn.style.display = 'none';
+  // Always-visible download+install control. The auto-check just relabels it
+  // (newer available vs reinstall latest); tapping downloads GitHub's firmware and
+  // uploads it. The actual flash stays confirm-gated (we never silently re-flash).
+  const dlBtn = spEl('button', 's2-sp-btn', 'Download latest firmware from GitHub & install');
   async function runFwCheck() {
-    checkBtn.textContent = 'Checking GitHub…'; checkBtn.disabled = true;
     try {
       const gh = await githubFwVersion();
       const rel = gh > cur ? `NEWER available (v${gh} > your v${cur})` : gh === cur ? `you are up to date (v${gh})` : `GitHub is older (v${gh} < your v${cur})`;
       result.textContent = `GitHub firmware: v${gh} — ${rel}`;
-      dlBtn.style.display = gh > cur ? '' : 'none'; dlBtn.dataset.gh = gh;
+      dlBtn.dataset.gh = gh;
+      dlBtn.textContent = gh > cur ? `Download v${gh} from GitHub & install` : `Reinstall latest firmware (v${gh})`;
     } catch (e) { result.textContent = 'GitHub check failed: ' + e.message; logger.warn('gh fw', e); }
-    checkBtn.textContent = 'Re-check GitHub'; checkBtn.disabled = false;
   }
-  checkBtn.addEventListener('click', runFwCheck);
   dlBtn.addEventListener('click', async () => {
-    if (!confirm(`Download firmware v${dlBtn.dataset.gh} from GitHub and upload it to the DE1? The machine will restart.`)) return;
+    const v = dlBtn.dataset.gh ? `v${dlBtn.dataset.gh}` : 'the latest firmware';
+    if (!confirm(`Download ${v} from GitHub and upload it to the DE1? The machine will restart.`)) return;
+    const restore = dlBtn.textContent;
     dlBtn.textContent = 'Downloading…';
     try {
       const buf = await fetch(FW_URL).then((r) => r.arrayBuffer());
@@ -629,29 +861,33 @@ function firmwarePanel(body) {
       const r = await api.uploadFirmware(buf);
       toast(r.ok ? 'Firmware uploaded — machine restarting' : 'Upload failed');
     } catch (e) { logger.warn('fw dl', e); toast('Download/upload failed'); }
-    dlBtn.textContent = 'Download newest & upload';
+    dlBtn.textContent = restore;
   });
-  ghRow.appendChild(checkBtn); ghRow.appendChild(result); ghRow.appendChild(dlBtn);
+  ghRow.appendChild(result); ghRow.appendChild(dlBtn);
   body.appendChild(ghRow);
   // Auto-check GitHub on open (John's todo: auto-compare vs the connected DE1);
-  // if newer, the one-tap "Download newest & upload" appears — the actual flash
-  // stays confirm-gated (we never silently re-flash the machine).
-  checkBtn.textContent = 'Re-check GitHub';
+  // the button stays visible either way — the actual flash stays confirm-gated.
   result.textContent = 'Checking GitHub for newer firmware…';
   setTimeout(() => runFwCheck(), 80);
 
   // --- manual file upload ---
   body.appendChild(spEl('p', 's2-sp-sub', 'Or upload a firmware file manually (.dat/.bin). The machine restarts when the update completes.'));
-  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.dat,.bin,.fw,.dfu'; inp.style.cssText = 'display:block;margin:14px 0;font-size:28px;';
-  const btn = spEl('button', 's2-sp-btn grey', 'Upload firmware'); btn.disabled = true; btn.style.opacity = '.5';
-  inp.addEventListener('change', () => { btn.disabled = !inp.files.length; btn.style.opacity = inp.files.length ? '1' : '.5'; });
+  // Hide the tiny native file input behind a big, finger-friendly "Choose file" button.
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.dat,.bin,.fw,.dfu'; inp.style.display = 'none';
+  const chooseBtn = spEl('button', 's2-sp-btn grey', 'Choose file…');
+  const fileName = spEl('span', 's2-sp-sub', 'No file chosen'); fileName.style.marginLeft = '28px';
+  chooseBtn.addEventListener('click', () => inp.click());
+  const fileRow = spEl('div'); fileRow.style.cssText = 'display:flex;align-items:center;margin:14px 0;';
+  fileRow.appendChild(chooseBtn); fileRow.appendChild(fileName);
+  const btn = spEl('button', 's2-sp-btn', 'Upload firmware'); btn.disabled = true; btn.style.opacity = '.5';
+  inp.addEventListener('change', () => { fileName.textContent = inp.files.length ? inp.files[0].name : 'No file chosen'; btn.disabled = !inp.files.length; btn.style.opacity = inp.files.length ? '1' : '.5'; });
   btn.addEventListener('click', () => {
     if (!inp.files.length) return;
     if (!confirm(`Upload ${inp.files[0].name} to the DE1? The machine will restart.`)) return;
     toast('Uploading firmware…');
     api.uploadFirmware(inp.files[0]).then((r) => toast(r.ok ? 'Firmware uploaded — machine restarting' : 'Upload failed')).catch((e) => { logger.warn('fw', e); toast('Upload failed'); });
   });
-  body.appendChild(inp); body.appendChild(btn);
+  body.appendChild(inp); body.appendChild(fileRow); body.appendChild(btn);
 }
 // Calibrate — REA exposes flow multipliers (/settings) and quick-adjust machine
 // values (/machine/settings); sensor calibration (temp/pressure/steam-temp/
@@ -717,7 +953,6 @@ function langPanel(body) {
   const cur = currentLangName();
   LANGUAGES.forEach((L) => { const r = spEl('button', 's2-sp-row' + (L.name === cur ? ' sel' : ''), ''); r.appendChild(spEl('div', 's2-sp-name', L.name));
     r.addEventListener('click', () => { setLang(L.name); toast('Saved'); langPanel((body.innerHTML = '', body)); }); body.appendChild(r); });
-  body.appendChild(spEl('p', 's2-sp-note', 'Translations come from the de1app GUI translation sheet (src/i18n/de1-translations.csv, 32 languages) — the same source the Streamline skin uses.'));
 }
 function miscPanel(body) {
   const mk = (label, on, fn) => { const r = spEl('div', 's2-sp-row'); r.appendChild(spEl('div', 's2-sp-name', label));
@@ -744,10 +979,9 @@ async function createPreset(kind) {
     await api.updateWorkflow({ profile });
     live._newType = kind; live._forceType = kind;
   } catch (e) { logger.warn('newPreset', e); }
-  // Pressure/Flow -> the parametric step editor (settings_2a/2b); Advanced keeps
-  // the generic step editor. goto('advanced') dispatches by profile type.
-  if (kind === 'Pressure' || kind === 'Flow') goto('advanced');
-  else openProfileEditor(() => goto('advanced'));
+  // Pressure/Flow/Advanced all open their faithful editor via goto('advanced'),
+  // which dispatches by profile type.
+  goto('advanced');
 }
 
 const actions = {
@@ -807,8 +1041,15 @@ const actions = {
   newPressure: () => createPreset('Pressure'), newFlow: () => createPreset('Flow'), newAdvanced: () => createPreset('Advanced'),
   skinPicker: () => subPanel('Skin', skinPanel), langPicker: () => subPanel('Language', langPanel),
   extPicker: () => subPanel('Extensions', extPanel), misc: () => subPanel('Misc', miscPanel),
-  firmware: () => subPanel('Firmware', firmwarePanel),
-  appUpdate: () => { toast('Re-pulling skins from source…'); api.updateSkins().then((r) => toast(r.ok ? 'App/skins updated from source' : 'Update failed')).catch(() => toast('Update failed')); },
+  firmware: () => { machineActionUrl('firmware'); subPanel('Firmware', firmwarePanel); },
+  appUpdate: () => {
+    // Show progress in the button itself (no toast): "Check for updates" -> "Updating…" -> result.
+    live.appUpdateLabel = t('Updating…'); host.update(live);
+    api.updateSkins()
+      .then((r) => { live.appUpdateLabel = r.ok ? t('Up to date') : t('Update failed'); })
+      .catch(() => { live.appUpdateLabel = t('Update failed'); })
+      .finally(() => { host.update(live); setTimeout(() => { live.appUpdateLabel = null; host.update(live); }, 3000); });
+  },
   cancel: () => { clearTimeout(advSaveT); cleanup(); closeOverlay(); opened = false; if (hooks.onClose) hooks.onClose(); },
   // Ok: flush the in-progress profile edit to the workflow, then close and tell
   // the espresso page to reload it, so what you edited is what you see.
@@ -821,18 +1062,26 @@ const actions = {
   },
   // MACHINE
   editCool: () => num('Cool down after (min)', 'coolMin', 5, 240, 5, (v) => api.setPresence({ ...(live._presence || {}), sleepTimeoutMinutes: v }).catch((e) => logger.warn('presence', e))),
-  toggleKeepHot: () => { live.keepHot = !live.keepHot; host.update(live); api.setPresence({ ...(live._presence || {}), userPresenceEnabled: !live.keepHot }).catch((e) => logger.warn('presence', e)); },
-  clean: () => { if (confirm('Run cleaning cycle?')) openMaintenance('clean'); },
-  descale: () => openMaintenance('descale'),
-  calibrate: () => subPanel('Calibrate', calibratePanel),
+  toggleKeepHot: () => { live.keepHot = !live.keepHot; host.update(live); renderKeepHotSched(); api.setPresence({ ...(live._presence || {}), userPresenceEnabled: !live.keepHot }).catch((e) => logger.warn('presence', e)); },
+  readManual: () => window.open(manualUrl(), '_blank'),
+  clean: () => { machineActionUrl('clean'); if (confirm('Run cleaning cycle?')) openMaintenance('clean', clearMachineActionUrl); else clearMachineActionUrl(); },
+  descale: () => { machineActionUrl('descale'); openMaintenance('descale', clearMachineActionUrl); },
+  calibrate: () => { machineActionUrl('calibrate'); subPanel('Calibrate', calibratePanel); },
+  transport: () => { machineActionUrl('transport'); openMaintenance('transport', clearMachineActionUrl); },
   // APP
   editBrightness: () => num('Screen brightness (%)', 'brightness', 5, 100, 5, (v) => api.setBrightness(v)),
-  searchDevices: () => api.scanDevices(false).then(() => setTimeout(() => goto('app'), 800)).catch((e) => logger.warn('scan', e)),
-  docs: () => window.open('https://decentespresso.com/learn', '_blank'),
+  searchDevices: () => { toast('Scanning for Bluetooth devices…'); api.scanDevices(false).catch((e) => logger.warn('scan', e)).finally(() => setTimeout(refreshAppDevices, 1000)); },
+  docs: () => window.open(quickstartUrl(), '_blank'),
+  // Tcl "Exit app" sleeps the machine + exits the native app. A web/Catalyst build
+  // can't quit itself, so we sleep the machine (the meaningful part) and close settings.
+  exitApp: () => { api.setMachineState('sleeping').catch(() => {}); actions.cancel(); },
   // PRESETS / ADVANCED
   openEditor: () => openProfileEditor(() => goto('advanced')),
   advTempUp: () => advTemp(+1), advTempDown: () => advTemp(-1),
   ppToggleTemps: () => { ppToggleTempSteps(live); saveAdv(); },
+  // Advanced editor Steps/Limits sub-tabs (switch page without reloading the profile)
+  advTabSteps: () => { live.advPage = 'settings_2c'; host.show('settings_2c'); host.update(live); renderAdvancedEditor(host, live, saveAdv); },
+  advTabLimits: () => { live.advPage = 'settings_2c2'; host.show('settings_2c2'); host.update(live); renderAdvancedEditor(host, live, saveAdv); },
 };
 // Temperature +/- on the 2a/2b/2c thermometer sets every step's temperature.
 // On the pressure editor it drives the parametric temp param instead.
@@ -843,4 +1092,4 @@ function advTemp(d) {
   (live._advProfile.steps || []).forEach((s) => { s.temperature = live.editTemp; });
   host.update(live); saveAdv();
 }
-function cleanup() { closeSubPanel(); removeProfileEditor(host); if (host) { ['.s2-preset-scroll', '.adv-sliders', '.s2-name-input'].forEach((s) => { const el = host.page.querySelector(s); if (el) el.remove(); }); } }
+function cleanup() { closeSubPanel(); removeProfileEditor(host); removeAdvancedEditor(host); schedEls = null; if (host) { brightEls = null; if (scaleSub) { try { scaleSub.close(); } catch (e) { /* */ } scaleSub = null; } scaleStateEls.length = 0; ['.s2-preset-scroll', '.adv-sliders', '.s2-name-input', '.mach-sched', '.app-devices', '.app-bright'].forEach((s) => { const el = host.page.querySelector(s); if (el) el.remove(); }); } }

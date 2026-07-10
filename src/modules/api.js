@@ -34,6 +34,7 @@ export const tareScale = () => fetch(`${API_BASE}/scale/tare`, { method: 'PUT' }
 export const getDevices = () => j('GET', '/devices');
 export const scanDevices = (connect = false) => j('GET', `/devices/scan?connect=${connect}&quick=true`);
 export const connectDevice = (id) => fetch(`${API_BASE}/devices/connect?deviceId=${encodeURIComponent(id)}`, { method: 'PUT' });
+export const disconnectDevice = (id) => fetch(`${API_BASE}/devices/disconnect?deviceId=${encodeURIComponent(id)}`, { method: 'PUT' });
 export const getShotIds = () => j('GET', '/shots/ids');
 export const getPlugins = () => j('GET', '/plugins');
 export const getPresence = () => j('GET', '/presence/settings');

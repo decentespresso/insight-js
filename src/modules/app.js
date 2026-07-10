@@ -8,7 +8,7 @@ import { EspressoChart, ZoomChart, MiniChart } from './chart.js';
 import { config, families, stateToFamily } from '../config/index.js';
 import { openProfileSelector } from '../views/profile_selector.js';
 import { openDYE } from '../views/dye.js';
-import { openSettings, isSettingsOpen, settingsGoto, closeSettings, settingsShowChooser, settingsEditProfile, settingsLastTab } from '../views/settings.js';
+import { openSettings, isSettingsOpen, settingsGoto, closeSettings, settingsShowChooser, settingsEditProfile, settingsMachineAction, settingsLastTab } from '../views/settings.js';
 import { openProfileEditor } from '../views/profile_editor.js';
 import { openNumpad } from '../views/numpad.js';
 import { openSaver, closeSaver, isSaverOpen } from '../views/saver.js';
@@ -142,7 +142,11 @@ const settingsHooks = {
   onChooser: (open) => writeHash(open ? '#/settings/presets/new' : '#/settings/presets'),
   // Profile editor (pressure) -> deep-link by name so a refresh re-opens the editor.
   onEditProfile: (name) => writeHash('#/settings/presets/profile/edit/' + encodeURIComponent(name || 'Untitled')),
+  // Machine maintenance sub-action (clean/descale/transport/calibrate/firmware) ->
+  // its own URL; null clears back to the plain machine tab.
+  onMachineAction: (name) => writeHash(name ? '#/settings/machine/' + name : '#/settings/machine'),
 };
+const MACHINE_ACTIONS = ['clean', 'descale', 'transport', 'calibrate', 'firmware'];
 async function applyRoute() {
   applyingRoute = true;
   try {
@@ -154,6 +158,12 @@ async function applyRoute() {
       if (parts[1] === 'presets' && parts[2] === 'profile' && parts[3] === 'edit') {
         if (!isSettingsOpen()) await openSettings('machine', settingsHooks);
         await settingsEditProfile(parts.slice(4).join('/'));
+        return;
+      }
+      // #/settings/machine/<action> -> open the machine tab, then run the sub-action.
+      if (parts[1] === 'machine' && MACHINE_ACTIONS.includes(parts[2])) {
+        if (!isSettingsOpen()) await openSettings('machine', settingsHooks); else await settingsGoto('machine');
+        settingsMachineAction(parts[2]);
         return;
       }
       const tab = SETTINGS_TABS.includes(parts[1]) ? parts[1] : 'machine';

@@ -102,3 +102,70 @@ export function openNumpad(opts) {
 
   openModal(root);
 }
+
+// Full-screen TIME editor (for the keep-hot schedule). Same modal chrome as the
+// numpad, but the value is HH:MM (colon, not a decimal point) and — when the clock
+// is 12-hour — an AM/PM toggle appears. opts: { title, minutes, ampm, onOk(minutes) }
+export function openTimeEditor(opts) {
+  const o = Object.assign({ minutes: 0, ampm: false }, opts);
+  let mer = 'AM';                      // meridiem when ampm mode
+  let hh = Math.floor(o.minutes / 60), mm = o.minutes % 60;
+  if (o.ampm) { mer = hh >= 12 ? 'PM' : 'AM'; hh = hh % 12; if (hh === 0) hh = 12; }
+  let entry = `${hh}:${String(mm).padStart(2, '0')}`;
+  let typing = false;
+
+  const root = el('div', 'position:absolute;inset:0;display:flex;flex-direction:column;background:#eef0f7;font-family:\'InsightUI\',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;');
+  const header = el('div', 'text-align:center;padding:20px;font-size:30px;font-weight:700;color:#42465c;letter-spacing:1px;');
+  header.textContent = o.title; root.appendChild(header);
+
+  const body = el('div', 'flex:1;display:flex;gap:20px;padding:0 24px;min-height:0;align-items:stretch;');
+  root.appendChild(body);
+  const left = el('div', 'flex:1;display:flex;flex-direction:column;gap:20px;min-width:0;justify-content:center;');
+  body.appendChild(left);
+
+  const row = el('div', 'display:flex;align-items:center;justify-content:center;gap:24px;');
+  const valBox = el('div', 'min-width:220px;height:96px;padding:0 24px;border:2px solid var(--ins-green,#7ea63a);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:56px;color:#42465c;background:#fff;');
+  const draw = () => { valBox.textContent = entry; };
+  draw();
+  row.appendChild(valBox);
+  let merBtn = null;
+  if (o.ampm) {
+    merBtn = el('button', 'width:140px;height:96px;border:none;border-radius:10px;background:#c9cef0;color:#42465c;font-size:40px;font-weight:700;cursor:pointer;', mer);
+    merBtn.addEventListener('click', () => { mer = mer === 'AM' ? 'PM' : 'AM'; merBtn.textContent = mer; });
+    row.appendChild(merBtn);
+  }
+  left.appendChild(row);
+
+  const pad = el('div', 'flex:1;max-height:520px;display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:1fr;gap:16px;');
+  body.appendChild(pad);
+  const feed = (ch) => {
+    if (!typing) { entry = ''; typing = true; }
+    if (ch === ':' && entry.includes(':')) return;
+    entry = (entry + ch).slice(0, 5);
+    draw();
+  };
+  const keyBtn = (label, fn, dim) => {
+    const b = el('button', `border:none;border-radius:10px;background:${dim ? '#e2e3e8' : '#b9bde0'};color:#fff;font-size:40px;cursor:pointer;`, label);
+    if (dim) b.style.color = '#7a80a0';
+    b.addEventListener('click', fn); return b;
+  };
+  ['7', '8', '9', '4', '5', '6', '1', '2', '3'].forEach((d) => pad.appendChild(keyBtn(d, () => feed(d))));
+  pad.appendChild(keyBtn(':', () => feed(':'), true));
+  pad.appendChild(keyBtn('0', () => feed('0')));
+  pad.appendChild(keyBtn('⌫', () => { entry = typing ? entry.slice(0, -1) : ''; typing = true; draw(); }, true));
+
+  const footer = el('div', 'display:flex;gap:20px;justify-content:center;padding:22px;');
+  const foot = (label, primary, fn) => { const b = el('button', `width:230px;height:64px;border:none;border-radius:10px;font-size:28px;cursor:pointer;background:${primary ? '#c9cef0' : '#dfe1ec'};color:${primary ? '#42465c' : '#8a90a2'};`, label); b.addEventListener('click', fn); return b; };
+  const parse = () => {
+    let h, m;
+    if (entry.includes(':')) { const [a, b] = entry.split(':'); h = parseInt(a, 10) || 0; m = parseInt(b, 10) || 0; }
+    else { const s = entry.replace(/\D/g, ''); m = parseInt(s.slice(-2), 10) || 0; h = parseInt(s.slice(0, -2), 10) || 0; }
+    if (o.ampm) { h = h % 12; if (mer === 'PM') h += 12; }
+    m = Math.min(59, Math.max(0, m)); h = Math.min(23, Math.max(0, h));
+    return h * 60 + m;
+  };
+  footer.appendChild(foot(t('Cancel'), false, () => closeModal()));
+  footer.appendChild(foot(t('Ok'), true, () => { o.onOk(parse()); closeModal(); }));
+  root.appendChild(footer);
+  openModal(root);
+}
