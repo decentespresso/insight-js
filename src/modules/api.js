@@ -49,6 +49,10 @@ export const deleteProfile = (id) => fetch(`${API_BASE}/profiles/${encodeURIComp
 export const setProfileVisibility = (id, visibility) => j('PUT', `/profiles/${encodeURIComponent(id)}/visibility`, { visibility }); // visible|hidden|deleted
 export const getMachineSettings = () => j('GET', '/machine/settings');
 export const setMachineSettings = (s) => j('POST', '/machine/settings', s);
+// DE1 advanced settings (heater warmup/test flow + timeout, idle temp, heater
+// voltage, refill-kit override) — the calibrate pages 2/3 write these.
+export const getMachineAdvancedSettings = () => j('GET', '/machine/settings/advanced');
+export const setMachineAdvancedSettings = (s) => j('POST', '/machine/settings/advanced', s);
 export const setShotSettings = (s) => j('POST', '/machine/shotSettings', s);
 export const getReaSettings = () => j('GET', '/settings');
 export const setReaSettings = (s) => j('POST', '/settings', s);

@@ -8,7 +8,8 @@ import { logger } from '../modules/logger.js';
 
 const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; };
 
-export async function openGFC() {
+export async function openGFC(onClose) {
+  const close = () => { closeOverlay(); if (onClose) onClose(); };
   let settings = {};
   try { settings = (await api.getReaSettings()) || {}; } catch (e) { logger.warn('gfc settings', e); }
   const cur = settings.volumeFlowMultiplier ?? 1.0;
@@ -34,7 +35,7 @@ export async function openGFC() {
     </div>`;
   openOverlay(panel);
   const $ = (id) => panel.querySelector(id);
-  $('#gfc-back').addEventListener('click', closeOverlay);
+  $('#gfc-back').addEventListener('click', close);
 
   const recompute = () => {
     const rep = parseFloat($('#gfc-rep').value), act = parseFloat($('#gfc-act').value);
@@ -53,7 +54,7 @@ export async function openGFC() {
     try {
       await api.setReaSettings({ volumeFlowMultiplier: nm, weightFlowMultiplier: nm, hotWaterFlowMultiplier: settings.hotWaterFlowMultiplier ?? nm });
       $('#gfc-status').textContent = `Applied. Multiplier ${nm.toFixed(3)}.`;
-      setTimeout(closeOverlay, 800);
+      setTimeout(close, 800);
     } catch (e) { logger.error('gfc save', e); $('#gfc-status').textContent = 'Failed: ' + e.message; }
   });
 }

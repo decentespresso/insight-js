@@ -8,7 +8,7 @@ import { EspressoChart, ZoomChart, MiniChart } from './chart.js';
 import { config, families, stateToFamily } from '../config/index.js';
 import { openProfileSelector } from '../views/profile_selector.js';
 import { openDYE } from '../views/dye.js';
-import { openSettings, isSettingsOpen, settingsGoto, closeSettings, settingsShowChooser, settingsEditProfile, settingsMachineAction, settingsLastTab } from '../views/settings.js';
+import { openSettings, isSettingsOpen, settingsGoto, closeSettings, settingsShowChooser, settingsEditProfile, settingsMachineAction, settingsAppAction, settingsCalStep, settingsLastTab } from '../views/settings.js';
 import { openProfileEditor } from '../views/profile_editor.js';
 import { openNumpad } from '../views/numpad.js';
 import { openSaver, closeSaver, isSaverOpen } from '../views/saver.js';
@@ -145,8 +145,13 @@ const settingsHooks = {
   // Machine maintenance sub-action (clean/descale/transport/calibrate/firmware) ->
   // its own URL; null clears back to the plain machine tab.
   onMachineAction: (name) => writeHash(name ? '#/settings/machine/' + name : '#/settings/machine'),
+  // App tab sub-page (Misc) -> its own URL; null clears back to the plain app tab.
+  onAppAction: (name) => writeHash(name ? '#/settings/app/' + name : '#/settings/app'),
+  // Calibrate step (warning / 1 / 2 / 3 / gfc) -> its own URL under the calibrate flow.
+  onCalStep: (step) => writeHash(step ? '#/settings/machine/calibrate/' + step : '#/settings/machine'),
 };
 const MACHINE_ACTIONS = ['clean', 'descale', 'transport', 'calibrate', 'firmware'];
+const APP_ACTIONS = ['misc'];
 async function applyRoute() {
   applyingRoute = true;
   try {
@@ -160,10 +165,24 @@ async function applyRoute() {
         await settingsEditProfile(parts.slice(4).join('/'));
         return;
       }
+      // #/settings/machine/calibrate/<step> (warning|1|2|3|gfc) -> open the machine
+      // tab, then jump straight to that calibrate step. Must precede the generic
+      // machine-action branch (which would otherwise swallow parts[2]==='calibrate').
+      if (parts[1] === 'machine' && parts[2] === 'calibrate' && parts[3]) {
+        if (!isSettingsOpen()) await openSettings('machine', settingsHooks); else await settingsGoto('machine');
+        settingsCalStep(parts[3]);
+        return;
+      }
       // #/settings/machine/<action> -> open the machine tab, then run the sub-action.
       if (parts[1] === 'machine' && MACHINE_ACTIONS.includes(parts[2])) {
         if (!isSettingsOpen()) await openSettings('machine', settingsHooks); else await settingsGoto('machine');
         settingsMachineAction(parts[2]);
+        return;
+      }
+      // #/settings/app/<action> (e.g. misc) -> open the app tab, then open the sub-page.
+      if (parts[1] === 'app' && APP_ACTIONS.includes(parts[2])) {
+        if (!isSettingsOpen()) await openSettings('app', settingsHooks); else await settingsGoto('app');
+        settingsAppAction(parts[2]);
         return;
       }
       const tab = SETTINGS_TABS.includes(parts[1]) ? parts[1] : 'machine';

@@ -1,0 +1,47 @@
+name: Build and Release WebUI Skin
+
+# Packages the static skin into a Decent.app-installable ZIP and attaches it to a
+# GitHub Release, per reaprime's doc/Skins.md ("Production deployment via GitHub
+# releases"). This skin has no build step — index.html + src/ + assets/ are the
+# deployable bundle — so we zip them directly with index.html at the ZIP root.
+
+on:
+  push:
+    tags:
+      - 'v*'            # e.g. v0.1.0, v1.2.3
+  workflow_dispatch:    # allow manual runs from the Actions tab
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required for softprops/action-gh-release to create the release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Write manifest.json with the release version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"   # strip leading v -> semver
+          cat > manifest.json << EOF
+          {
+            "id": "insight",
+            "name": "Insight",
+            "description": "Faithful web port of the classic de1app Insight skin for Decent.app",
+            "version": "${VERSION}",
+            "author": "John Buckman / Decent Espresso",
+            "repository": "https://github.com/${GITHUB_REPOSITORY}"
+          }
+          EOF
+
+      - name: Create skin bundle (index.html at ZIP root)
+        run: |
+          zip -r "insight-${GITHUB_REF_NAME}.zip" \
+            index.html manifest.json src assets LICENSE README.md \
+            -x '*/.*'
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: insight-${{ github.ref_name }}.zip
+          generate_release_notes: true

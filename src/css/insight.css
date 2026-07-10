@@ -325,6 +325,22 @@ html, body { margin: 0; background: #000; color: var(--ins-ink); overflow: hidde
 /* App tab: screen-brightness slider */
 .app-bright { position: absolute; inset: 0; pointer-events: none; --pp-thumb: 140px; }
 .app-bright .pp-slider { pointer-events: auto; }
+/* Misc page (Tcl "measurements"): full-page overlay of toggles / selectors / tan sliders */
+.misc-panel { position: absolute; inset: 0; pointer-events: none; --pp-thumb: 140px; font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
+.misc-panel .pp-slider { pointer-events: auto; }
+.misc-txt { position: absolute; white-space: nowrap; line-height: 1.15; }
+.stage-tan .pp-thumb { background: #e4d1c1; }   /* Tk scale -background #e4d1c1 */
+.misc-seg { position: absolute; display: flex; background: #fafafa; border-radius: 18px; overflow: hidden; box-shadow: inset 0 0 0 3px #ececf1; }
+.misc-seg-b { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 34px; font-weight: 700; color: #9aa0b0; cursor: pointer; user-select: none; border-right: 2px solid #ececf1; }
+.misc-seg-b:last-child { border-right: none; }
+.misc-seg-b.on { background: #4d85f4; color: #fff; }
+/* Calibrate page (Tcl calibrate/2/3): full-page overlay, paginated */
+.cal-panel { position: absolute; inset: 0; pointer-events: none; --pp-thumb: 120px; font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
+.cal-panel .pp-slider { pointer-events: auto; }
+.cal-entry { position: absolute; min-width: 150px; height: 70px; padding: 0 24px; display: flex; align-items: center; justify-content: center;
+  background: #f7f8ff; border: 2px solid #dfe2f2; border-radius: 8px; color: #4e85f4; font-weight: 700; font-size: 44px; }
+.cal-btn { position: absolute; height: 120px; display: flex; align-items: center; justify-content: center; padding: 0 24px; text-align: center;
+  background: #c1c4e3; color: #fafbff; font-weight: 700; font-size: 34px; border-radius: 24px; cursor: pointer; line-height: 1.1; }
 /* move-on-if toggle switch */
 .adv-toggle { position: absolute; width: 96px; height: 48px; border-radius: 24px; background: #cfd2e4; pointer-events: none; transition: background .15s; }
 .adv-toggle::after { content: ''; position: absolute; top: 5px; left: 5px; width: 38px; height: 38px; border-radius: 50%; background: #fff; transition: left .15s; }

@@ -373,7 +373,12 @@ function quickstartUrl() {
 // "Keep hot" is on. reaprime has no wake/sleep scheduler, so the times persist
 // client-side. Values are minutes-of-day (0..1439); Tcl uses seconds (step 60).
 const SCHED_KEY = 'insight_keephot_sched';
-const is12h = () => { try { return new Intl.DateTimeFormat([], { hour: 'numeric' }).resolvedOptions().hour12 ?? false; } catch (e) { return false; } };
+// 12-hour clock: an explicit Misc "AM/PM" choice wins; otherwise fall back to the OS locale.
+const is12h = () => {
+  const o = localStorage.getItem('insight_ampm');
+  if (o === '1') return true; if (o === '0') return false;
+  try { return new Intl.DateTimeFormat([], { hour: 'numeric' }).resolvedOptions().hour12 ?? false; } catch (e) { return false; }
+};
 const fmtHM = (min) => {
   const m = Math.max(0, Math.min(1439, Math.round(min)));
   let h = Math.floor(m / 60); const mm = String(m % 60).padStart(2, '0');
@@ -428,13 +433,21 @@ function editSchedTime(title, key) {
 // ---- App tab: interactive Bluetooth device list (Tcl Connect: machine on the
 // left, scale/other devices on the right). Each row connects/disconnects. ----
 let appDevBusy = false;
-// Live scale weight (streamed) shown after "connected" for a connected scale.
+// Live scale weight / machine metal (group) temperature, streamed and shown after
+// "connected" for the connected scale / espresso machine.
 let scaleWeight = null, scaleSub = null;
-const scaleStateEls = [];   // the state <div>s of connected scales, updated live
-const scaleStateText = () => `${t('connected')} : ${scaleWeight != null ? scaleWeight.toFixed(1) : '—'} g`;
+let metalTemp = null, snapSub = null;
+const scaleStateEls = [];   // state <div>s of connected scales
+const machineStateEls = []; // state <div>s of connected machines
+const scaleStateText = () => `<b>${t('connected')}</b> : ${scaleWeight != null ? scaleWeight.toFixed(1) : '—'} g`;
+const machineStateText = () => `<b>${t('connected')}</b> : ${metalTemp != null ? metalTemp.toFixed(1) : '—'} °C`;
 function ensureScaleSub() {
   if (scaleSub) return;
-  scaleSub = api.connectScale((d) => { if (typeof d.weight === 'number') { scaleWeight = d.weight; for (const el of scaleStateEls) el.textContent = scaleStateText(); } });
+  scaleSub = api.connectScale((d) => { if (typeof d.weight === 'number') { scaleWeight = d.weight; for (const el of scaleStateEls) el.innerHTML = scaleStateText(); } });
+}
+function ensureSnapSub() {
+  if (snapSub) return;
+  snapSub = api.connectSnapshot((d) => { if (typeof d.groupTemperature === 'number') { metalTemp = d.groupTemperature; for (const el of machineStateEls) el.innerHTML = machineStateText(); } });
 }
 function renderAppDevices() {
   if (!host) return;
@@ -443,8 +456,8 @@ function renderAppDevices() {
   if (!box) { box = document.createElement('div'); box.className = 'app-devices'; host.page.appendChild(box); }
   box.style.display = 'block';
   box.innerHTML = '';
-  scaleStateEls.length = 0;
-  ensureScaleSub();          // start streaming weight so connected scales can show it
+  scaleStateEls.length = 0; machineStateEls.length = 0;
+  ensureScaleSub(); ensureSnapSub();   // stream weight / metal temp for connected devices
   const devs = live._devices || [];
   const column = (x, title, list) => {
     const col = document.createElement('div'); col.className = 'app-dev-col'; col.style.left = x + 'px';
@@ -456,7 +469,9 @@ function renderAppDevices() {
       const nm = document.createElement('div'); nm.className = 'app-dev-name'; nm.textContent = d.name || d.id;
       const st = document.createElement('div'); st.className = 'app-dev-state';
       const connected = d.state === 'connected';
-      if (connected && d.type === 'scale') { st.textContent = scaleStateText(); scaleStateEls.push(st); }   // live weight
+      if (connected && d.type === 'scale') { st.innerHTML = scaleStateText(); scaleStateEls.push(st); }        // live weight
+      else if (connected && d.type === 'machine') { st.innerHTML = machineStateText(); machineStateEls.push(st); }  // live metal temp
+      else if (connected) { st.innerHTML = `<b>${t('connected')}</b>`; }
       else st.textContent = t(d.state || '');
       info.appendChild(nm); info.appendChild(st); row.appendChild(info);
       const btn = document.createElement('button'); btn.className = 'app-dev-btn' + (connected ? ' on' : '');
@@ -544,10 +559,12 @@ function refreshSched() {
   schedEls.now.textContent = `${t('Now')} ${fmtHM(d.getHours() * 60 + d.getMinutes())}`;
 }
 async function loadApp() {
-  const [devices, display, plugins, info] = await Promise.all([
+  const [devices, display, plugins, info, rea] = await Promise.all([
     api.getDevices().catch(() => []), api.getDisplayState().catch(() => ({})), api.getPlugins().catch(() => []), api.getAppInfo().catch(() => ({})),
+    api.getReaSettings().catch(() => ({})),
   ]);
   live.brightness = typeof display.brightness === 'number' ? display.brightness : 100;
+  live._rea = rea || {};   // reaprime /settings (scalePowerMode, lowBatteryBrightnessLimit, chargingMode…) for the Misc page
   live.nPlugins = (plugins || []).length;
   live._devices = devices || [];
   live.appVer = info.fullVersion ? `Decent.app ${info.fullVersion}` : 'version unknown';
@@ -783,6 +800,10 @@ function closeSubPanel() {
   if (!host) return;
   const c = host.page.querySelector('.s2-dialog-content');
   if (c) c.remove();
+  const mp = host.page.querySelector('.misc-panel');   // Misc renders a full-page overlay, not flow content
+  if (mp) mp.remove();
+  const cp = host.page.querySelector('.cal-panel');    // Calibrate likewise
+  if (cp) cp.remove();
   dialogReturn = null;
 }
 function dialogClose() {
@@ -794,6 +815,7 @@ function dialogClose() {
   renderAppDevices();   // restore the Bluetooth device list on APP
   renderAppBrightness();
   if (curTab === 'machine') clearMachineActionUrl();   // drop the /machine/<action> deep-link
+  if (curTab === 'app') clearAppActionUrl();           // drop the /app/<action> deep-link (e.g. /app/misc)
 }
 // Deep-link helpers: each MACHINE sub-action (clean/descale/transport/calibrate/
 // firmware) owns a #/settings/machine/<action> URL so it survives a refresh.
@@ -801,6 +823,10 @@ function machineActionUrl(name) { if (hooks.onMachineAction) hooks.onMachineActi
 function clearMachineActionUrl() { if (hooks.onMachineAction) hooks.onMachineAction(null); }
 // Route-driven trigger (called by app.js applyRoute for #/settings/machine/<action>).
 export function settingsMachineAction(name) { const fn = actions[name]; if (fn) fn(); }
+// The APP tab's Misc sub-page owns #/settings/app/misc so it survives a refresh.
+function appActionUrl(name) { if (hooks.onAppAction) hooks.onAppAction(name); }
+function clearAppActionUrl() { if (hooks.onAppAction) hooks.onAppAction(null); }
+export function settingsAppAction(name) { const fn = actions[name]; if (fn) fn(); }
 const spEl = (tag, cls, txt) => { const n = document.createElement(tag); if (cls) n.className = cls; if (txt != null) n.textContent = txt; return n; };
 
 async function skinPanel(body) {
@@ -889,51 +915,193 @@ function firmwarePanel(body) {
   });
   body.appendChild(inp); body.appendChild(fileRow); body.appendChild(btn);
 }
-// Calibrate — REA exposes flow multipliers (/settings) and quick-adjust machine
-// values (/machine/settings); sensor calibration (temp/pressure/steam-temp/
-// voltage) is NOT writable (same limitation Streamline notes).
-// A columnar calibration table (Measurement | Current value | Adjust), mirroring
-// the Tcl Calibrate page's tabular layout. Each row edits + saves inline.
-function calTable(body, title, rows) {
-  const wrap = spEl('div', 's2-cal');
-  const head = spEl('div', 's2-cal-row s2-cal-h');
-  head.appendChild(spEl('div', 's2-cal-cell', title));
-  head.appendChild(spEl('div', 's2-cal-cell num', 'Value'));
-  head.appendChild(spEl('div', 's2-cal-cell num', 'Adjust'));
-  wrap.appendChild(head);
-  rows.forEach(([label, val, min, max, step, save]) => {
-    const r = spEl('div', 's2-cal-row');
-    r.appendChild(spEl('div', 's2-cal-cell', label));
-    const inp = document.createElement('input'); inp.type = 'number'; inp.value = val; inp.min = min; inp.max = max; inp.step = step; inp.className = 's2-cal-input';
-    const commit = () => { let v = parseFloat(inp.value); if (Number.isNaN(v)) return; v = Math.min(max, Math.max(min, v)); inp.value = v;
-      Promise.resolve(save(v)).then(() => toast('Saved')).catch((e) => { logger.warn('cal save', e); toast('Save failed'); }); };
-    inp.addEventListener('change', commit);
-    const stepper = spEl('div', 's2-cal-stepper');
-    const mk = (txt, d) => { const b = spEl('button', 's2-cal-step', txt); b.addEventListener('click', () => { inp.value = (Math.round((parseFloat(inp.value || 0) + d) / step) * step).toFixed(String(step).split('.')[1]?.length || 0); commit(); }); return b; };
-    stepper.appendChild(mk('−', -step)); stepper.appendChild(mk('+', step));
-    const cell = spEl('div', 's2-cal-cell num'); cell.appendChild(inp);
-    r.appendChild(cell); r.appendChild(stepper); wrap.appendChild(r);
-  });
-  body.appendChild(wrap);
+// Calibrate — faithful port of the Tcl default-skin calibrate / calibrate2 /
+// calibrate3 pages, gated behind the same "bad calibration" warning info-page.
+// Rendered as a full 2560-space overlay on the settings_message frame, paginated
+// 1→2→3→1. Most controls are reaprime-backed: page 1 flow multiplier (/settings),
+// steam temp / fan / steam flow (/machine/settings); page 2 heater idle/warmup/
+// test + voltage (/machine/settings/advanced); page 3 hot-water/flush (/machine/
+// settings) + refill-kit override (/advanced). The temperature/pressure "Measured"
+// entries feed the DE1 sensor-calibration path (de1_send_calibration), which
+// reaprime does not expose, so they persist locally (as do the page-3 toggles /
+// stop-at-weight-offset, which have no gateway field yet).
+let calPage = 0;
+let calAfterWarn = null;   // dialogOk consumes this to advance the warning gate -> calibrate
+// Each calibrate step owns a URL: #/settings/machine/calibrate/{warning,1,2,3,gfc}.
+function calStepUrl(step) { if (hooks.onCalStep) hooks.onCalStep(step); }
+// GFC uses the single overlay (openOverlay replaces the settings stage), so on
+// close we reopen the machine tab — otherwise the URL says /settings/machine while
+// the settings overlay is gone. Reopening lands back on a clean machine tab.
+function gfcReturn() { clearMachineActionUrl(); openSettings('machine', hooks); }
+// Route-driven entry (app.js applyRoute for #/settings/machine/calibrate/<step>).
+export function settingsCalStep(step) {
+  if (step === 'warning') { calibrateWarn(); return; }
+  if (step === 'gfc') { calStepUrl('gfc'); openGFC(gfcReturn); return; }
+  const n = parseInt(step, 10);
+  if (n >= 1 && n <= 3) { calPage = n - 1; calibrateOpen(); }
 }
-async function calibratePanel(body) {
-  body.appendChild(spEl('p', 's2-sp-sub', 'Loading calibration settings…'));
-  const [rea, machine] = await Promise.all([api.getReaSettings().catch(() => ({})), api.getMachineSettings().catch(() => ({}))]);
-  body.innerHTML = '';
-  calTable(body, 'Flow multipliers', [
-    ['Weight flow', rea.weightFlowMultiplier ?? 1, 0.1, 3, 0.05, (v) => { rea.weightFlowMultiplier = v; return api.setReaSettings(rea); }],
-    ['Volume flow (s)', rea.volumeFlowMultiplier ?? 0.3, 0, 2, 0.05, (v) => { rea.volumeFlowMultiplier = v; return api.setReaSettings(rea); }],
-    ['Hot-water flow', rea.hotWaterFlowMultiplier ?? 0.3, 0, 2, 0.05, (v) => { rea.hotWaterFlowMultiplier = v; return api.setReaSettings(rea); }],
-  ]);
-  calTable(body, 'Machine quick-adjust', [
-    ['Tank / preheat temp (°C)', machine.tankTemp ?? 20, 0, 60, 1, (v) => { machine.tankTemp = v; return api.setMachineSettings(machine); }],
-    ['Fan threshold (°C)', machine.fan ?? 50, 30, 60, 1, (v) => { machine.fan = v; return api.setMachineSettings(machine); }],
-    ['Flush temp (°C)', machine.flushTemp ?? 25, 0, 95, 1, (v) => { machine.flushTemp = v; return api.setMachineSettings(machine); }],
-  ]);
-  const gfc = spEl('button', 's2-sp-btn', 'Graphical Flow Calibrator →');
-  gfc.addEventListener('click', () => { closeSubPanel(); openGFC(); });
-  body.appendChild(gfc);
-  body.appendChild(spEl('p', 's2-sp-note', 'Temperature / pressure / steam-temperature / fan / voltage sensor calibration is NOT writable via reaprime — the gateway (and, per Streamline, the current firmware API) exposes no write for these. Only the flow multipliers and quick-adjust machine values above are settable here; deeper calibration must be done in the native Decent.app.'));
+function calibrateWarn() {
+  calStepUrl('warning');
+  calAfterWarn = () => { calPage = 0; calibrateOpen(); };
+  subPanel('', (body) => {
+    body.style.cssText += ';display:flex;align-items:center;justify-content:center;text-align:center;';
+    const p = spEl('div'); p.style.cssText = 'font-size:52px;font-weight:700;color:#2d3046;line-height:1.35;max-width:1620px;';
+    p.textContent = t('Bad calibration settings might make your espresso machine unuseable.  Only proceed if you have been told to or have read the relevant manual sections and know what you are doing.');
+    body.appendChild(p);
+  });
+}
+function calibrateOpen() {
+  // Open the calibrate frame synchronously (no await) so the warning's Ok has an
+  // immediate effect — otherwise the ~1s settings fetch leaves the warning up, and
+  // a second Ok tap falls through to dialogClose and bounces back to the machine
+  // tab. Seed with the last-known/placeholder values, then refresh when data lands.
+  if (!live._cal) live._cal = { ms: {}, adv: {}, rea: {}, goalTemp: 92, goalPress: 9 };
+  calStepUrl(String(calPage + 1));   // #/settings/machine/calibrate/<page>
+  subPanel('Calibrate', calBuild);
+  Promise.all([
+    api.getMachineSettings().catch(() => ({})), api.getMachineAdvancedSettings().catch(() => ({})),
+    api.getReaSettings().catch(() => ({})), api.getWorkflow().catch(() => ({})),
+  ]).then(([ms, adv, rea, wf]) => {
+    const steps = (wf && wf.profile && wf.profile.steps) || [];
+    const goalTemp = steps.length ? (steps[0].temperature ?? 92) : 92;
+    const goalPress = steps.reduce((m, s) => Math.max(m, s.pressure ?? 0), 0) || 9;
+    live._cal = { ms: ms || {}, adv: adv || {}, rea: rea || {}, goalTemp, goalPress };
+    if (host && host.page.querySelector('.cal-panel')) renderCalPage();   // repaint with real values
+  }).catch((e) => logger.warn('cal load', e));
+}
+function calBuild(body) {
+  body.style.display = 'none';
+  let cp = host.page.querySelector('.cal-panel'); if (cp) cp.remove();
+  cp = document.createElement('div'); cp.className = 'cal-panel'; host.page.appendChild(cp);
+  renderCalPage();
+}
+function calNumpad(title, value, decimals, min, max, onOk) {
+  import('./numpad.js').then(({ openNumpad }) => openNumpad({ title: t(title), value, min, max, decimals, onOk }));
+}
+function renderCalPage() {
+  const box = host.page.querySelector('.cal-panel'); if (!box) return;
+  box.innerHTML = '';
+  const d = live._cal || { ms: {}, adv: {}, rea: {}, goalTemp: 92, goalPress: 9 };
+  const g = (k, dv) => { const v = localStorage.getItem(k); return v == null ? dv : v; };
+  const saveMs = (k, v) => { (d.ms)[k] = v; api.setMachineSettings({ [k]: v }).catch((e) => logger.warn('cal ms', e)); };
+  const saveAdv = (k, v) => { (d.adv)[k] = v; api.setMachineAdvancedSettings({ [k]: v }).catch((e) => logger.warn('cal adv', e)); };
+  const saveRea = (k, v) => { (d.rea)[k] = v; api.setReaSettings({ [k]: v }).catch((e) => logger.warn('cal rea', e)); };
+  // ---- overlay control helpers (2560-space) ----
+  const txt = (x, y, s, o = {}) => { const e = spEl('div', 'misc-txt'); e.textContent = s;
+    e.style.cssText = `left:${x}px;top:${y}px;font-size:${o.size || 36}px;font-weight:${o.weight || 400};color:${o.color || C.title};`;
+    if (o.width) { e.style.width = o.width + 'px'; e.style.whiteSpace = 'normal'; }
+    if (o.anchor === 'ne') e.style.transform = 'translateX(-100%)';
+    box.appendChild(e); return e; };
+  const link = (x, y, s, onClick) => { const e = txt(x, y, s, { size: 36, weight: 700, color: C.val }); e.style.pointerEvents = 'auto'; e.style.cursor = 'pointer'; e.addEventListener('click', onClick); return e; };
+  const entry = (x, y, v, onTap) => { const e = spEl('div', 'cal-entry'); e.style.cssText = `left:${x}px;top:${y}px;pointer-events:auto;cursor:pointer`; e.textContent = v; e.addEventListener('click', onTap); box.appendChild(e); return e; };
+  const toggle = (x, y, on, onChange) => { const tg = spEl('div', 'adv-toggle' + (on ? ' on' : '')); tg.style.cssText = `left:${x}px;top:${y}px;pointer-events:auto;cursor:pointer`;
+    tg.addEventListener('click', () => { const nw = !tg.classList.contains('on'); tg.classList.toggle('on', nw); onChange(nw); }); box.appendChild(tg); return tg; };
+  const toggleRow = (tx, ty, lx, ly, label, on, onChange) => { const tg = toggle(tx, ty, on, onChange); const l = txt(lx, ly, t(label), { size: 40, color: C.val }); l.style.pointerEvents = 'auto'; l.style.cursor = 'pointer'; l.addEventListener('click', () => tg.click()); };
+  const seg = (x, y, w, h, labels, sel, onSel) => { const c = spEl('div', 'misc-seg'); c.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;pointer-events:auto`;
+    labels.forEach((L, i) => { const s = spEl('div', 'misc-seg-b' + (i === sel ? ' on' : '')); s.textContent = t(L); s.addEventListener('click', () => { [...c.children].forEach((ch, j) => ch.classList.toggle('on', j === i)); onSel(i); }); c.appendChild(s); }); box.appendChild(c); };
+  const slider = (x, y, w, min, max, val, onChange, h = 80) => { const sl = spEl('div', 'pp-slider h stage-tan'); sl.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px`;
+    const th = spEl('div', 'pp-thumb'); sl.appendChild(th);
+    const put = (v) => { const f = Math.max(0, Math.min(1, (v - min) / (max - min))); th.style.left = `calc(${f} * (100% - var(--pp-thumb)))`; }; put(val);
+    const setv = (ev) => { const r = sl.getBoundingClientRect(); const f = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)); const v = min + f * (max - min); put(v); onChange(v); };
+    let drag = false; sl.addEventListener('pointerdown', (ev) => { drag = true; sl.setPointerCapture?.(ev.pointerId); setv(ev); ev.preventDefault(); });
+    sl.addEventListener('pointermove', (ev) => { if (drag) setv(ev); }); const up = (ev) => { drag = false; try { sl.releasePointerCapture?.(ev.pointerId); } catch (e) { /* */ } };
+    sl.addEventListener('pointerup', up); sl.addEventListener('pointercancel', up); box.appendChild(sl); };
+  const btn = (x, y, w, label, onClick) => { const b = spEl('div', 'cal-btn'); b.style.cssText = `left:${x}px;top:${y}px;width:${w}px;pointer-events:auto`; b.textContent = label; b.addEventListener('click', onClick); box.appendChild(b); };
+
+  if (calPage === 0) {
+    // ===== Page 1: sensor table (Saved | Factory | Sensor | Goal | Measured) =====
+    txt(500, 350, t('Saved'), { size: 34, weight: 700, color: '#c0c4e1', anchor: 'ne' });
+    txt(760, 350, t('Factory'), { size: 34, weight: 700, color: '#c0c4e1', anchor: 'ne' });
+    txt(850, 350, t('Sensor'), { size: 34, weight: 700, color: '#c0c4e1' });
+    txt(1750, 350, t('Goal'), { size: 34, weight: 700, color: '#c0c4e1', anchor: 'ne' });
+    txt(1880, 350, t('Measured'), { size: 34, weight: 700, color: '#c0c4e1' });
+    const R = (n) => 350 + n * 115;
+    // Temperature (sensor calibration -> local; Goal = profile temperature)
+    txt(850, R(1), t('Temperature'), { size: 38, weight: 700 });
+    txt(1750, R(1), `${d.goalTemp.toFixed(1)}°C`, { size: 36, anchor: 'ne' });
+    let tm = parseFloat(g('cal_temp_measured', d.goalTemp.toFixed(1)));
+    const te = entry(1880, R(1) - 34, tm.toFixed(1), () => calNumpad('Temperature', tm, 1, 1, 120, (v) => { tm = v; localStorage.setItem('cal_temp_measured', v); te.textContent = v.toFixed(1); }));
+    // Pressure (sensor calibration -> local; Goal = profile peak pressure)
+    txt(850, R(2), t('Pressure'), { size: 38, weight: 700 });
+    txt(1750, R(2), `${d.goalPress.toFixed(1)} bar`, { size: 36, anchor: 'ne' });
+    let pm = parseFloat(g('cal_press_measured', d.goalPress.toFixed(1)));
+    const pe = entry(1880, R(2) - 34, pm.toFixed(1), () => calNumpad('Pressure', pm, 1, 0, 15, (v) => { pm = v; localStorage.setItem('cal_press_measured', v); pe.textContent = v.toFixed(1); }));
+    // Flow multiplier (/settings weightFlowMultiplier) — Goal shows the multiplier
+    txt(850, R(3), t('Flow'), { size: 38, weight: 700 });
+    const fm0 = d.rea.weightFlowMultiplier ?? 1;
+    const fg = txt(1750, R(3), `x ${fm0.toFixed(3)}`, { size: 36, anchor: 'ne' });
+    slider(1880, R(3) - 22, 400, 0.13, 2, fm0, (v) => { v = Math.round(v / 0.01) * 0.01; fg.textContent = `x ${v.toFixed(3)}`; saveRea('weightFlowMultiplier', v); });
+    // Steam temperature (/machine/settings steamTemp)
+    txt(850, R(4), t('Steam temperature'), { size: 38, weight: 700 });
+    txt(500, R(4), '—', { size: 34, anchor: 'ne' }); txt(760, R(4), '—', { size: 34, anchor: 'ne' });
+    const st0 = d.ms.steamTemp ?? parseFloat(g('cal_steam_temp', '160'));
+    const sg = txt(1750, R(4), `${Math.round(st0)}°C`, { size: 36, anchor: 'ne' });
+    slider(1880, R(4) - 22, 400, 134, 170, st0, (v) => { v = Math.round(v); sg.textContent = `${v}°C`; localStorage.setItem('cal_steam_temp', v); saveMs('steamTemp', v); });
+    // Fan turns on at (/machine/settings fan)
+    txt(850, R(5), t('Fan turns on at:'), { size: 38, weight: 700 });
+    const fan0 = d.ms.fan ?? 60;
+    const fang = txt(1750, R(5), `${Math.round(fan0)}°C`, { size: 36, anchor: 'ne' });
+    slider(1880, R(5) - 22, 400, 0, 100, fan0, (v) => { v = Math.round(v); fang.textContent = `${v}°C`; saveMs('fan', v); });
+    // Steam flow rate (/machine/settings steamFlow)
+    txt(850, R(6), t('Steam flow rate'), { size: 38, weight: 700 });
+    txt(500, R(6), '—', { size: 34, anchor: 'ne' }); txt(760, R(6), '—', { size: 34, anchor: 'ne' });
+    const sf0 = d.ms.steamFlow ?? 1.6;
+    const sfg = txt(1750, R(6), `${sf0.toFixed(1)} mL/s`, { size: 36, anchor: 'ne' });
+    slider(1880, R(6) - 22, 400, 0.4, 2.5, sf0, (v) => { v = Math.round(v / 0.1) * 0.1; sfg.textContent = `${v.toFixed(1)} mL/s`; saveMs('steamFlow', v); });
+    // GFC button hidden for now (still reachable via #/settings/machine/calibrate/gfc):
+    // btn(1470, 1450, 540, t('Graphical Flow Calibrator'), () => { calStepUrl('gfc'); closeSubPanel(); openGFC(gfcReturn); });
+  } else if (calPage === 1) {
+    // ===== Page 2: voltage + heater warmup/test tuning (/machine/settings/advanced) =====
+    txt(350, 450, t('Voltage'), { size: 38, weight: 700 });
+    const hv = d.adv.heaterVoltage;
+    const hvLabel = (hv == 120 || hv == 1120) ? '120V' : (hv == 230 || hv == 1230) ? '230V' : (hv > 50 && hv < 300) ? `${hv}V` : t('unknown');
+    txt(700, 450, hvLabel, { size: 38, weight: 700 });
+    if (hv != 120 && hv != 1120) link(1000, 450, `[ ${t('Set to 120V')} ]`, () => { saveAdv('heaterVoltage', 120); renderCalPage(); });
+    if (hv != 230 && hv != 1230) link(1600, 450, `[ ${t('Set to 230V')} ]`, () => { saveAdv('heaterVoltage', 230); renderCalPage(); });
+    // Heater idle temperature
+    txt(350, 610, t('Heater idle temperature'), { size: 34, weight: 700 });
+    const hit = d.adv.heaterIdleTemp ?? 99; const hitv = txt(970, 678, `${Math.round(hit)}°C`, { size: 34 });
+    slider(350, 652, 600, 0, 99, hit, (v) => { v = Math.round(v); hitv.textContent = `${v}°C`; saveAdv('heaterIdleTemp', v); });
+    // Heater warmup flow rate
+    txt(350, 810, t('Heater warmup flow rate'), { size: 34, weight: 700 });
+    const p1 = d.adv.heaterPh1Flow ?? 2; const p1v = txt(970, 878, `${p1.toFixed(1)} mL/s`, { size: 34 });
+    slider(350, 852, 600, 0.5, 6, p1, (v) => { v = Math.round(v / 0.1) * 0.1; p1v.textContent = `${v.toFixed(1)} mL/s`; saveAdv('heaterPh1Flow', v); });
+    // Heater test time-out
+    txt(1350, 610, t('Heater test time-out'), { size: 34, weight: 700 });
+    const to = d.adv.heaterPh2Timeout ?? 1; const tov = txt(1970, 678, `${to.toFixed(1)} ${t('seconds')}`, { size: 34 });
+    slider(1350, 652, 600, 1, 30, to, (v) => { v = Math.round(v / 0.1) * 0.1; tov.textContent = `${v.toFixed(1)} ${t('seconds')}`; saveAdv('heaterPh2Timeout', v); });
+    // Heater test flow rate
+    txt(1350, 810, t('Heater test flow rate'), { size: 34, weight: 700 });
+    const p2 = d.adv.heaterPh2Flow ?? 4; const p2v = txt(1970, 878, `${p2.toFixed(1)} mL/s`, { size: 34 });
+    slider(1350, 852, 600, 0.5, 8, p2, (v) => { v = Math.round(v / 0.1) * 0.1; p2v.textContent = `${v.toFixed(1)} mL/s`; saveAdv('heaterPh2Flow', v); });
+    // Stop at weight offset (no gateway field -> local)
+    txt(1350, 1000, t('Stop at weight offset'), { size: 34, weight: 700 });
+    let swo = parseFloat(g('cal_stop_weight_offset', '0.15')); const swov = txt(1970, 1068, `${swo.toFixed(2)} ${t('seconds')}`, { size: 34 });
+    slider(1350, 1042, 600, 0, 2, swo, (v) => { v = Math.round(v / 0.01) * 0.01; swo = v; swov.textContent = `${v.toFixed(2)} ${t('seconds')}`; localStorage.setItem('cal_stop_weight_offset', v); });
+    // Defaults for cafe
+    link(350, 1075, `[ ${t('Defaults for cafe')} ]`, () => { saveAdv('heaterIdleTemp', 99); saveAdv('heaterPh2Timeout', 1); saveAdv('heaterPh1Flow', 2); saveAdv('heaterPh2Flow', 4); renderCalPage(); });
+  } else {
+    // ===== Page 3: hot-water/flush + steam options + refill-kit =====
+    txt(350, 510, t('Hot water flow rate'), { size: 34, weight: 700 });
+    const hwf = d.ms.hotWaterFlow ?? 10; const hwfv = txt(970, 578, `${hwf.toFixed(1)} mL/s`, { size: 34 });
+    slider(350, 552, 600, 1, 10, hwf, (v) => { v = Math.round(v / 0.1) * 0.1; hwfv.textContent = `${v.toFixed(1)} mL/s`; saveMs('hotWaterFlow', v); });
+    txt(350, 710, t('Flush flow rate'), { size: 34, weight: 700 });
+    const ff = d.ms.flushFlow ?? 6; const ffv = txt(970, 778, `${ff.toFixed(1)} mL/s`, { size: 34 });
+    slider(350, 752, 600, 1, 10, ff, (v) => { v = Math.round(v / 0.1) * 0.1; ffv.textContent = `${v.toFixed(1)} mL/s`; saveMs('flushFlow', v); });
+    txt(350, 910, t('Flush timeout'), { size: 34, weight: 700 });
+    const fto = d.ms.flushTimeout ?? 5; const ftov = txt(970, 978, `${Math.round(fto)} ${t('seconds')}`, { size: 34 });
+    slider(350, 952, 600, 3, 120, fto, (v) => { v = Math.round(v); ftov.textContent = `${v} ${t('seconds')}`; saveMs('flushTimeout', v); });
+    toggleRow(1350, 566, 1500, 564, 'Two tap steam stop', g('cal_two_tap', '0') === '1', (v) => localStorage.setItem('cal_two_tap', v ? '1' : '0'));
+    toggleRow(1350, 666, 1500, 664, 'Slow start', g('cal_slow_start', '0') === '1', (v) => localStorage.setItem('cal_slow_start', v ? '1' : '0'));
+    toggleRow(1350, 766, 1500, 764, 'Eco steam', g('cal_eco_steam', '0') === '1', (v) => localStorage.setItem('cal_eco_steam', v ? '1' : '0'));
+    // Refill kit override (/machine/settings/advanced refillKitSetting: auto=2, off=0, on=1)
+    txt(1350, 960, t('Refill kit: unable to detect'), { size: 30, weight: 700 });
+    const rk = d.adv.refillKitSetting;
+    const rkSel = rk === 0 ? 1 : rk === 1 ? 2 : 0;
+    seg(1350, 1020, 900, 80, ['auto-detect', 'force off', 'force on'], rkSel, (i) => saveAdv('refillKitSetting', i === 0 ? 2 : i === 1 ? 0 : 1));
+  }
+  // page-nav button (cycles 1 -> 2 -> 3 -> 1)
+  btn(2060, 1450, 450, `${t('Page')} ${calPage + 1} ${t('of')} 3 >`, () => { calPage = (calPage + 1) % 3; calStepUrl(String(calPage + 1)); renderCalPage(); });
 }
 async function extPanel(body) {
   const plugins = await api.getPlugins().catch(() => []);
@@ -954,15 +1122,109 @@ function langPanel(body) {
   LANGUAGES.forEach((L) => { const r = spEl('button', 's2-sp-row' + (L.name === cur ? ' sel' : ''), ''); r.appendChild(spEl('div', 's2-sp-name', L.name));
     r.addEventListener('click', () => { setLang(L.name); toast('Saved'); langPanel((body.innerHTML = '', body)); }); body.appendChild(r); });
 }
+// Misc — faithful port of the Tcl default-skin "measurements" page: a two-column
+// panel of toggles / segmented selectors / tan sliders. Rendered as a full
+// 2560-space overlay on the settings_message frame (title + baked Ok), so every
+// control sits at its native Tcl coordinate. Settings are cosmetic app-level
+// preferences (no reaprime endpoint, exactly as the Tcl stores them in ::settings),
+// persisted to localStorage; the units toggle shares the existing 'units' key.
 function miscPanel(body) {
-  const mk = (label, on, fn) => { const r = spEl('div', 's2-sp-row'); r.appendChild(spEl('div', 's2-sp-name', label));
-    const t = spEl('button', 's2-sp-btn' + (on ? '' : ' grey'), on ? 'On' : 'Off'); t.style.marginLeft = 'auto';
-    t.addEventListener('click', () => { const now = t.textContent === 'Off'; t.textContent = now ? 'On' : 'Off'; t.classList.toggle('grey', !now); fn(now); }); r.appendChild(t); body.appendChild(r); };
-  mk('Fahrenheit (off = Celsius)', localStorage.getItem('units') === 'f', (v) => localStorage.setItem('units', v ? 'f' : 'c'));
-  mk('Insight Dark theme', localStorage.getItem('theme') === 'dark', (v) => { const th = v ? 'dark' : 'light'; localStorage.setItem('theme', th);
-    if (th === 'dark') document.documentElement.dataset.theme = 'dark'; else delete document.documentElement.dataset.theme;
-    window.dispatchEvent(new Event('insight-themechange')); });
-  mk('Screensaver clock', localStorage.getItem('insight_saver_clock') === '1', (v) => localStorage.setItem('insight_saver_clock', v ? '1' : '0'));
+  body.style.display = 'none';                                   // the flow-content container is unused for Misc
+  let mp = host.page.querySelector('.misc-panel'); if (mp) mp.remove();
+  mp = document.createElement('div'); mp.className = 'misc-panel'; host.page.appendChild(mp);
+
+  const g = (k, d) => { const v = localStorage.getItem(k); return v == null ? d : v; };
+  const gi = (k, d) => { const v = parseFloat(localStorage.getItem(k)); return Number.isFinite(v) ? v : d; };
+  const set = (k, v) => localStorage.setItem(k, v);
+
+  // text: anchor nw (default) / ne (right-aligned) / center — mirrors add_de1_text.
+  const txt = (x, y, s, o = {}) => {
+    const d = document.createElement('div'); d.className = 'misc-txt'; d.textContent = s;
+    d.style.cssText = `left:${x}px;top:${y}px;font-size:${o.size || 40}px;font-weight:${o.weight || 400};color:${o.color || C.title};`;
+    if (o.width) { d.style.width = o.width + 'px'; d.style.whiteSpace = 'normal'; }
+    if (o.anchor === 'ne') d.style.transform = 'translateX(-100%)';
+    if (o.anchor === 'center') d.style.transform = 'translateX(-50%)';
+    mp.appendChild(d); return d;
+  };
+  // on/off toggle (same graphic as the advanced editor); clicking the paired blue
+  // label toggles it too, matching the Tcl button hit-zone over toggle+text.
+  const toggle = (x, y, on, onChange) => {
+    const t = document.createElement('div'); t.className = 'adv-toggle' + (on ? ' on' : '');
+    t.style.cssText = `left:${x}px;top:${y}px;pointer-events:auto;cursor:pointer`;
+    t.addEventListener('click', () => { const now = !t.classList.contains('on'); t.classList.toggle('on', now); onChange(now); });
+    mp.appendChild(t); return t;
+  };
+  const toggleRow = (togX, togY, labX, labY, label, on, onChange, o = {}) => {
+    const t = toggle(togX, togY, on, onChange);
+    const l = txt(labX, labY, t2(label), { size: 40, color: C.val, anchor: o.anchor, width: o.width });
+    l.style.pointerEvents = 'auto'; l.style.cursor = 'pointer'; l.addEventListener('click', () => t.click());
+    return t;
+  };
+  // segmented selector (dui dselector): equal blue-fill segments, selected index sel.
+  const seg = (x, y, w, h, labels, sel, onSel, o = {}) => {
+    const c = document.createElement('div'); c.className = 'misc-seg';
+    c.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;pointer-events:auto`;
+    if (o.anchor === 'ne') c.style.transform = 'translateX(-100%)';
+    labels.forEach((L, i) => { const s = document.createElement('div'); s.className = 'misc-seg-b' + (i === sel ? ' on' : ''); s.textContent = t2(L);
+      s.addEventListener('click', () => { [...c.children].forEach((ch, j) => ch.classList.toggle('on', j === i)); onSel(i); }); c.appendChild(s); });
+    mp.appendChild(c); return c;
+  };
+  // tan slider (Tk scale, #e4d1c1 thumb on the grey trough) over a numeric range.
+  const slider = (x, y, w, min, max, val, onChange, h = 96) => {
+    const sl = document.createElement('div'); sl.className = 'pp-slider h stage-tan';
+    sl.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px`;
+    const thumb = document.createElement('div'); thumb.className = 'pp-thumb'; sl.appendChild(thumb);
+    const put = (v) => { const f = Math.max(0, Math.min(1, (v - min) / (max - min))); thumb.style.left = `calc(${f} * (100% - var(--pp-thumb)))`; };
+    put(val);
+    const setv = (ev) => { const r = sl.getBoundingClientRect(); const f = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)); const v = min + f * (max - min); put(v); onChange(v); };
+    let drag = false;
+    sl.addEventListener('pointerdown', (ev) => { drag = true; sl.setPointerCapture?.(ev.pointerId); setv(ev); ev.preventDefault(); });
+    sl.addEventListener('pointermove', (ev) => { if (drag) setv(ev); });
+    const up = (ev) => { drag = false; try { sl.releasePointerCapture?.(ev.pointerId); } catch (e) { /* */ } };
+    sl.addEventListener('pointerup', up); sl.addEventListener('pointercancel', up);
+    mp.appendChild(sl); return { put };
+  };
+  const t2 = (s) => t(s);   // alias (keeps the seg / toggleRow helpers terse)
+  // reaprime /settings writes (POST merges the partial, same as the Streamline
+  // skin's updateReaSetting → setReaSettings flush). Cache locally + fire-and-forget.
+  const rea = live._rea || (live._rea = {});
+  const setRea = (k, v) => { rea[k] = v; api.setReaSettings({ [k]: v }).catch((e) => logger.warn('setRea ' + k, e)); };
+
+  // ===== LEFT COLUMN =====
+  // Screen saver: label + "clock" toggle (drives saver.js), live REA brightness,
+  // and the change-image interval (feeds saver.js insight_saver_interval_sec).
+  txt(340, 500, t('Screen saver'), { size: 42, weight: 700 });
+  txt(1040, 498, t('clock'), { size: 40, color: C.val, anchor: 'ne' });
+  toggle(1060, 502, g('insight_saver_clock', '0') === '1', (v) => set('insight_saver_clock', v ? '1' : '0'));
+  let bval; const brightNow = () => Math.round(live.brightness ?? 100);
+  bval = txt(340, 664, `${t('Brightness')} ${brightNow()}%`, { size: 38 });
+  slider(340, 560, 800, 0, 100, brightNow(), (v) => { const n = Math.round(v); live.brightness = n; bval.textContent = `${t('Brightness')} ${n}%`; api.setBrightness(n).catch(() => {}); });
+  let ival; const ivMin = () => Math.max(0, Math.round(gi('insight_saver_interval_sec', 600) / 60));
+  ival = txt(340, 844, `${t('Change image every')}: ${ivMin()} ${t('minutes')}`, { size: 38 });
+  slider(340, 740, 800, 0, 120, ivMin(), (v) => { const n = Math.round(v); set('insight_saver_interval_sec', n * 60); ival.textContent = `${t('Change image every')}: ${n} ${t('minutes')}`; });
+
+  // ===== RIGHT COLUMN =====
+  // Celsius / Fahrenheit — client-side unit preference (no reaprime field; the
+  // Streamline skin leaves this inert too). Shares the existing 'units' key.
+  seg(2280, 480, 600, 80, ['Celsius', 'Fahrenheit'], g('units', 'c') === 'f' ? 1 : 0, (i) => set('units', i === 1 ? 'f' : 'c'), { anchor: 'ne' });
+  // AM/PM — overrides the OS locale for the keep-hot schedule clock (is12h()).
+  const ampmOn = () => { const o = localStorage.getItem('insight_ampm'); return o === '1' || (o == null && is12h()); };
+  toggleRow(1280, 506, 1420, 504, 'AM/PM', ampmOn(), (v) => set('insight_ampm', v ? '1' : '0'));
+  // 1.234,56 — client-side decimal-comma preference (no reaprime field yet).
+  toggleRow(1280, 606, 1420, 604, '1.234,56', g('insight_comma', '0') === '1', (v) => set('insight_comma', v ? '1' : '0'));
+  // Keep scale on → reaprime scalePowerMode: 'disabled' keeps the scale powered,
+  // 'displayOff' lets it sleep with the machine.
+  toggleRow(1280, 706, 1420, 704, 'Keep scale on', (rea.scalePowerMode || 'disabled') === 'disabled', (v) => setRea('scalePowerMode', v ? 'disabled' : 'displayOff'));
+  // Dim screen when battery low → reaprime lowBatteryBrightnessLimit (boolean).
+  toggleRow(1740, 606, 1880, 584, 'Dim screen when battery low', !!rea.lowBatteryBrightnessLimit, (v) => setRea('lowBatteryBrightnessLimit', v), { width: 440 });
+  // Smart charging → reaprime chargingMode + nightModeEnabled.
+  //   off = no battery management · on = balanced (80%) · night = balanced + night mode.
+  txt(1300, 1020, t('Smart charging'), { size: 42, weight: 700 });
+  const scSel = rea.nightModeEnabled ? 2 : ((rea.chargingMode || 'disabled') === 'disabled' ? 0 : 1);
+  seg(1300, 1080, 1000, 80, ['off', 'on', 'night'], scSel, (i) => {
+    setRea('chargingMode', i === 0 ? 'disabled' : 'balanced');
+    setRea('nightModeEnabled', i === 2);
+  });
 }
 
 // New preset: copy the current profile (reaprime models pressure/flow/advanced as
@@ -986,7 +1248,7 @@ async function createPreset(kind) {
 
 const actions = {
   navPresets: () => goto('presets'), navAdvanced: () => openAdvancedForSelected(), navMachine: () => goto('machine'), navApp: () => goto('app'),
-  dialogOk: () => dialogClose(),
+  dialogOk: () => { if (calAfterWarn) { const f = calAfterWarn; calAfterWarn = null; f(); return; } dialogClose(); },
   // New-preset chooser
   newPreset: () => { settingsShowChooser(); if (hooks.onChooser) hooks.onChooser(true); },
   choicesCancel: () => { settingsHideChooser(); if (hooks.onChooser) hooks.onChooser(false); },
@@ -1040,7 +1302,7 @@ const actions = {
   },
   newPressure: () => createPreset('Pressure'), newFlow: () => createPreset('Flow'), newAdvanced: () => createPreset('Advanced'),
   skinPicker: () => subPanel('Skin', skinPanel), langPicker: () => subPanel('Language', langPanel),
-  extPicker: () => subPanel('Extensions', extPanel), misc: () => subPanel('Misc', miscPanel),
+  extPicker: () => subPanel('Extensions', extPanel), misc: () => { appActionUrl('misc'); subPanel('Misc', miscPanel); },
   firmware: () => { machineActionUrl('firmware'); subPanel('Firmware', firmwarePanel); },
   appUpdate: () => {
     // Show progress in the button itself (no toast): "Check for updates" -> "Updating…" -> result.
@@ -1066,7 +1328,7 @@ const actions = {
   readManual: () => window.open(manualUrl(), '_blank'),
   clean: () => { machineActionUrl('clean'); if (confirm('Run cleaning cycle?')) openMaintenance('clean', clearMachineActionUrl); else clearMachineActionUrl(); },
   descale: () => { machineActionUrl('descale'); openMaintenance('descale', clearMachineActionUrl); },
-  calibrate: () => { machineActionUrl('calibrate'); subPanel('Calibrate', calibratePanel); },
+  calibrate: () => calibrateWarn(),   // warns first; calStepUrl writes /calibrate/warning
   transport: () => { machineActionUrl('transport'); openMaintenance('transport', clearMachineActionUrl); },
   // APP
   editBrightness: () => num('Screen brightness (%)', 'brightness', 5, 100, 5, (v) => api.setBrightness(v)),
@@ -1092,4 +1354,4 @@ function advTemp(d) {
   (live._advProfile.steps || []).forEach((s) => { s.temperature = live.editTemp; });
   host.update(live); saveAdv();
 }
-function cleanup() { closeSubPanel(); removeProfileEditor(host); removeAdvancedEditor(host); schedEls = null; if (host) { brightEls = null; if (scaleSub) { try { scaleSub.close(); } catch (e) { /* */ } scaleSub = null; } scaleStateEls.length = 0; ['.s2-preset-scroll', '.adv-sliders', '.s2-name-input', '.mach-sched', '.app-devices', '.app-bright'].forEach((s) => { const el = host.page.querySelector(s); if (el) el.remove(); }); } }
+function cleanup() { closeSubPanel(); removeProfileEditor(host); removeAdvancedEditor(host); schedEls = null; if (host) { brightEls = null; if (scaleSub) { try { scaleSub.close(); } catch (e) { /* */ } scaleSub = null; } if (snapSub) { try { snapSub.close(); } catch (e) { /* */ } snapSub = null; } scaleStateEls.length = 0; machineStateEls.length = 0; ['.s2-preset-scroll', '.adv-sliders', '.s2-name-input', '.mach-sched', '.app-devices', '.app-bright', '.misc-panel', '.cal-panel'].forEach((s) => { const el = host.page.querySelector(s); if (el) el.remove(); }); } }
