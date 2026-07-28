@@ -579,6 +579,16 @@ async function loadPresets() {
   live._presets = all.filter((r) => r.vis === 'visible');   // only visible (normal list)
   const cur = live._presets.find((i) => i.p.title === wf?.profile?.title) || live._presets[0];
   selectPreset(cur);
+  // The workflow may hold edits (e.g. from the Advanced/Flow/Pressure editor)
+  // that were never saved as a preset. Swap the *working* copy (live._selSteps)
+  // for those live steps so they aren't silently dropped — but leave live._sel.p
+  // (the stored original) alone, since savePresetName diffs against it to decide
+  // new-profile vs pure-rename.
+  if (cur && wf?.profile?.steps?.length && wf.profile.title === cur.p.title) {
+    live._selSteps = structuredClone(wf.profile.steps);
+    live.previewTemp = live._selSteps[0]?.temperature ?? live.previewTemp;
+    host.update(live); renderPreview();
+  }
   renderPresetList();
 }
 async function loadAdvanced() {
@@ -1276,10 +1286,15 @@ const actions = {
     try {
       if (edited) {
         // Content changed (e.g. temperature): POST a new profile (reaprime content-
-        // hashes, so distinct content => distinct id). If we branched off a default,
-        // hide that default — the Streamline "new profile replaces the default" flow.
+        // hashes, so distinct content => distinct id). Saving under the SAME title
+        // is an in-place overwrite, so retire the old id (hide if it's a default —
+        // those can't be deleted — else delete it) so edits don't pile up as
+        // same-named duplicates. A changed title is a deliberate fork: keep both.
         const created = await api.saveProfile({ ...sel.p, title: name, steps });
-        if (sel.isDefault && created && created.id && created.id !== sel.id) await api.setProfileVisibility(sel.id, 'hidden');
+        if (created && created.id && created.id !== sel.id && name === (sel.p.title || '').trim()) {
+          if (sel.isDefault) await api.setProfileVisibility(sel.id, 'hidden');
+          else await api.deleteProfile(sel.id).catch(() => {});
+        }
         toast(`Saved "${name}"`);
       } else if (!sel.isDefault) {
         await api.updateProfile(sel.id, { ...sel.p, title: name });   // pure rename of a user profile
