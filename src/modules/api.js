@@ -26,7 +26,6 @@ async function j(method, path, body) {
 }
 
 export const getMachineInfo = () => j('GET', '/machine/info');
-export const getMachineState = () => j('GET', '/machine/state');
 export const getWorkflow = () => j('GET', '/workflow');
 export const updateWorkflow = (partial) => j('PUT', '/workflow', partial); // deep-merged by gateway
 export const setMachineState = (s) => fetch(`${API_BASE}/machine/state/${s}`, { method: 'PUT' });
@@ -48,7 +47,6 @@ export const deleteSchedule = (id) => fetch(`${API_BASE}/presence/schedules/${en
 export const getProfiles = (opts = '') => j('GET', `/profiles${opts}`);
 export const getLatestShot = () => j('GET', '/shots/latest');
 export const updateShot = (id, data) => j('PUT', `/shots/${encodeURIComponent(id)}`, data);
-export const getProfile = (id) => j('GET', `/profiles/${encodeURIComponent(id)}`);
 export const saveProfile = (profile) => j('POST', '/profiles', { profile });
 export const updateProfile = (id, profile) => j('PUT', `/profiles/${encodeURIComponent(id)}`, { profile }); // rename / edit metadata
 export const deleteProfile = (id) => fetch(`${API_BASE}/profiles/${encodeURIComponent(id)}`, { method: 'DELETE' }); // soft delete
@@ -59,7 +57,6 @@ export const setMachineSettings = (s) => j('POST', '/machine/settings', s);
 // voltage, refill-kit override) — the calibrate pages 2/3 write these.
 export const getMachineAdvancedSettings = () => j('GET', '/machine/settings/advanced');
 export const setMachineAdvancedSettings = (s) => j('POST', '/machine/settings/advanced', s);
-export const setShotSettings = (s) => j('POST', '/machine/shotSettings', s);
 export const getReaSettings = () => j('GET', '/settings');
 export const setReaSettings = (s) => j('POST', '/settings', s);
 // App / skins / firmware — endpoints the Streamline skin uses (John's Basecamp todo).
@@ -83,7 +80,6 @@ function stream(path, onData, label) {
 }
 export const connectSnapshot = (onData) => stream('/machine/snapshot', onData, 'snapshot');
 export const connectScale = (onData) => stream('/scale/snapshot', onData, 'scale');
-export const connectShotSettings = (onData) => stream('/machine/shotSettings', onData, 'shotSettings');
 
 // --- Display brightness (tablet backlight) ---
 // reaprime controls the host tablet's screen brightness over the ws/v1/display

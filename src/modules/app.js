@@ -7,7 +7,6 @@ import { PageHost, curTheme } from './page.js';
 import { EspressoChart, ZoomChart, MiniChart } from './chart.js';
 import { config, families, stateToFamily } from '../config/index.js';
 import { openProfileSelector } from '../views/profile_selector.js';
-import { openDYE } from '../views/dye.js';
 import { openSettings, isSettingsOpen, settingsGoto, closeSettings, settingsShowChooser, settingsEditProfile, settingsMachineAction, settingsAppAction, settingsCalStep, settingsLastTab } from '../views/settings.js';
 import { openProfileEditor } from '../views/profile_editor.js';
 import { openNumpad } from '../views/numpad.js';
@@ -147,7 +146,7 @@ const settingsHooks = {
   onMachineAction: (name) => writeHash(name ? '#/settings/machine/' + name : '#/settings/machine'),
   // App tab sub-page (Misc) -> its own URL; null clears back to the plain app tab.
   onAppAction: (name) => writeHash(name ? '#/settings/app/' + name : '#/settings/app'),
-  // Calibrate step (warning / 1 / 2 / 3 / gfc) -> its own URL under the calibrate flow.
+  // Calibrate step (warning / 1 / 2 / 3) -> its own URL under the calibrate flow.
   onCalStep: (step) => writeHash(step ? '#/settings/machine/calibrate/' + step : '#/settings/machine'),
 };
 const MACHINE_ACTIONS = ['clean', 'descale', 'transport', 'calibrate', 'firmware'];
@@ -165,7 +164,7 @@ async function applyRoute() {
         await settingsEditProfile(parts.slice(4).join('/'));
         return;
       }
-      // #/settings/machine/calibrate/<step> (warning|1|2|3|gfc) -> open the machine
+      // #/settings/machine/calibrate/<step> (warning|1|2|3) -> open the machine
       // tab, then jump straight to that calibrate step. Must precede the generic
       // machine-action branch (which would otherwise swallow parts[2]==='calibrate').
       if (parts[1] === 'machine' && parts[2] === 'calibrate' && parts[3]) {
@@ -229,7 +228,6 @@ const actions = {
   sleep: () => { api.setMachineState('sleeping').catch((e) => logger.warn('sleep', e)); showSaver(); },
   settings: () => openSettings(settingsLastTab(), settingsHooks),
   editProfile: () => openProfileEditor(() => { loadWorkflow(); host.update(live); }),
-  describe: () => openDYE(),
   profileSelect: () => openProfileSelector((p) => { live.profileTitle = p.title; loadWorkflow(); host.update(live); }),
   zoomPF: () => showPage(baseOf(live.pageState) + '_zoomed'),
   zoomTemp: () => { tempLevel = 0; showPage(baseOf(live.pageState) + '_zoomed_temperature'); },

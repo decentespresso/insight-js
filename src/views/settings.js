@@ -10,7 +10,6 @@ import * as api from '../modules/api.js';
 import { PageHost } from '../modules/page.js';
 import { MiniChart } from '../modules/chart.js';
 import { openOverlay, closeOverlay } from '../modules/overlay.js';
-import { openGFC } from './gfc.js';
 import { openProfileEditor } from './profile_editor.js';
 import { openMaintenance } from './maintenance.js';
 import { renderProfileEditor, hideProfileEditor, removeProfileEditor, ppTempAdjust, ppToggleTempSteps, PRESSURE_SPEC, FLOW_SPEC } from './pressure_editor.js';
@@ -954,16 +953,11 @@ function firmwarePanel(body) {
 // stop-at-weight-offset, which have no gateway field yet).
 let calPage = 0;
 let calAfterWarn = null;   // dialogOk consumes this to advance the warning gate -> calibrate
-// Each calibrate step owns a URL: #/settings/machine/calibrate/{warning,1,2,3,gfc}.
+// Each calibrate step owns a URL: #/settings/machine/calibrate/{warning,1,2,3}.
 function calStepUrl(step) { if (hooks.onCalStep) hooks.onCalStep(step); }
-// GFC uses the single overlay (openOverlay replaces the settings stage), so on
-// close we reopen the machine tab — otherwise the URL says /settings/machine while
-// the settings overlay is gone. Reopening lands back on a clean machine tab.
-function gfcReturn() { clearMachineActionUrl(); openSettings('machine', hooks); }
 // Route-driven entry (app.js applyRoute for #/settings/machine/calibrate/<step>).
 export function settingsCalStep(step) {
   if (step === 'warning') { calibrateWarn(); return; }
-  if (step === 'gfc') { calStepUrl('gfc'); openGFC(gfcReturn); return; }
   const n = parseInt(step, 10);
   if (n >= 1 && n <= 3) { calPage = n - 1; calibrateOpen(); }
 }
@@ -1075,8 +1069,6 @@ function renderCalPage() {
     const sf0 = d.ms.steamFlow ?? 1.6;
     const sfg = txt(1750, R(6), `${sf0.toFixed(1)} mL/s`, { size: 36, anchor: 'ne' });
     slider(1880, R(6) - 22, 400, 0.4, 2.5, sf0, (v) => { v = Math.round(v / 0.1) * 0.1; sfg.textContent = `${v.toFixed(1)} mL/s`; saveMs('steamFlow', v); });
-    // GFC button hidden for now (still reachable via #/settings/machine/calibrate/gfc):
-    // btn(1470, 1450, 540, t('Graphical Flow Calibrator'), () => { calStepUrl('gfc'); closeSubPanel(); openGFC(gfcReturn); });
   } else if (calPage === 1) {
     // ===== Page 2: voltage + heater warmup/test tuning (/machine/settings/advanced) =====
     txt(350, 450, t('Voltage'), { size: 38, weight: 700 });
