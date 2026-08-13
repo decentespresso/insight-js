@@ -18,6 +18,7 @@ import { parsePressure } from '../config/pressure_profile.js';
 import { parseFlow } from '../config/flow_profile.js';
 import { setLang, currentLangName, currentLangCode, LANGUAGES, t } from '../modules/i18n.js';
 import { logger } from '../modules/logger.js';
+import { summarizeFirmwareCatalog } from '../modules/firmware-progress.js';
 
 const IMG = 'assets/insight/';
 // Card titles in the Tcl settings pages are a soft grey-blue (not navy); rows a
@@ -108,7 +109,7 @@ const machineEls = [
   B(P3, [1910, 516, 2540, 720], 'transport'),
   // Firmware card (Tcl: title 1304,750; button label centred at 1960,926; button 1280,850..2540,1020)
   V(P3, 1304, 750, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Firmware') }),
-  V(P3, 1910, 926, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: (l) => (l.githubFw != null && parseInt(l.fw, 10) === l.githubFw ? t('Firmware up to date') : `v${l.fw ?? '?'} · ${t('Update')}…`) }),
+  V(P3, 1910, 926, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: (l) => `v${l.fw ?? '?'} · ${t('Update')}…` }),
   B(P3, [1280, 850, 2540, 1020], 'firmware'),
   // Water level card (Tcl: title 1304,1080)
   V(P3, 1304, 1080, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Water level') }),
@@ -344,8 +345,6 @@ async function loadMachine() {
   live.cEspresso = (ids || []).length;
   live.version = `API v${info.version ?? '?'} · model ${info.model ?? '?'} · ${info.serialNumber ?? '?'} · GHC ${info.GHC ? 'yes' : 'no'}`;
   live.fw = info.version ?? '?';
-  // Compare against GitHub's latest so the Firmware button can show "up to date".
-  githubFwVersion().then((gh) => { live.githubFw = gh; if (host && curTab === 'machine') host.update(live); }).catch(() => {});
   live.coolMin = presence.sleepTimeoutMinutes ?? 30;
   live._presence = presence;
   loadSched(presence);   // sets live.keepHot + schedWake/schedSleep from the wake schedule
@@ -871,75 +870,73 @@ async function skinPanel(body) {
     body.appendChild(row);
   });
 }
-// DE1 firmware lives as a single de1plus/fw/bootfwupdate.dat; its version is a
-// little-endian u32 at byte offset 8 of the file header (de1app firmware_file_spec:
-// CheckSum, BoardMarker, Version, … each u32). We read just the header, compare to
-// the connected machine's version, and offer download+upload if GitHub is newer.
-const FW_URL = 'https://raw.githubusercontent.com/decentespresso/de1app/main/de1plus/fw/bootfwupdate.dat';
-async function githubFwVersion() {
-  const r = await fetch(FW_URL, { headers: { Range: 'bytes=0-15' } });   // header only (Range; falls back to full 200)
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  const dv = new DataView(await r.arrayBuffer());
-  return dv.getUint32(8, true);   // Version field, little-endian
+// Firmware — ported from streamline.js: GET /machine/firmware gives a catalog +
+// the middleware's own update verdict; a bundled artifact is flashed via
+// applyFirmware (or a manual file via uploadFirmware), both driven by the NDJSON
+// progress stream. Only `done` is success (see firmware-progress.js).
+function fwProgressLabel(st) {
+  if (!st || !st.phase) return '';
+  if (st.phase === 'erasing') return t('Erasing…');
+  if (st.phase === 'uploading') return st.percent >= 100 ? t('Verifying…') : `${t('Uploading')}… ${st.percent}%`;
+  if (st.phase === 'done') return t('Firmware upgraded — machine restarting');
+  return st.error || t('Firmware update failed');
 }
 function firmwarePanel(body) {
-  const cur = parseInt(live.fw, 10) || 0;
-  body.appendChild(spEl('p', 's2-sp-name', `Current machine firmware: v${live.fw ?? '?'}`));
+  body.appendChild(spEl('p', 's2-sp-name', `${t('Current machine firmware')}: v${live.fw ?? '?'}`));
+  const check = spEl('p', 's2-sp-sub', t('Checking for firmware updates…')); check.style.margin = '14px 0';
+  const applyBtn = spEl('button', 's2-sp-btn', ''); applyBtn.style.display = 'none';
+  const prog = spEl('p', 's2-sp-sub', ''); prog.style.margin = '14px 0'; prog.style.display = 'none';
+  body.appendChild(check); body.appendChild(applyBtn); body.appendChild(prog);
 
-  // --- GitHub check + auto download/upload (John's todo) ---
-  const ghRow = spEl('div'); ghRow.style.margin = '8px 0 14px';
-  const result = spEl('p', 's2-sp-sub', ''); result.style.margin = '14px 0';
-  // Always-visible download+install control. The auto-check just relabels it
-  // (newer available vs reinstall latest); tapping downloads GitHub's firmware and
-  // uploads it. The actual flash stays confirm-gated (we never silently re-flash).
-  const dlBtn = spEl('button', 's2-sp-btn', 'Download latest firmware from GitHub & install');
-  async function runFwCheck() {
+  let running = false;
+  const showProgress = (st) => { prog.style.display = 'block'; prog.textContent = fwProgressLabel(st); };
+  async function runOp(start, verb) {
+    if (running) return;
+    running = true; applyBtn.disabled = true;
+    showProgress({ phase: 'erasing', percent: 0 });
     try {
-      const gh = await githubFwVersion();
-      const rel = gh > cur ? `NEWER available (v${gh} > your v${cur})` : gh === cur ? `you are up to date (v${gh})` : `GitHub is older (v${gh} < your v${cur})`;
-      result.textContent = `GitHub firmware: v${gh} — ${rel}`;
-      dlBtn.dataset.gh = gh;
-      dlBtn.textContent = gh > cur ? `Download v${gh} from GitHub & install` : `Reinstall latest firmware (v${gh})`;
-    } catch (e) { result.textContent = 'GitHub check failed: ' + e.message; logger.warn('gh fw', e); }
+      await start(showProgress);   // resolves only on the stream's `done`
+      showProgress({ phase: 'done', percent: 100 });
+      setTimeout(() => initFwCheck(), 4000);   // installed build changed
+    } catch (e) { logger.warn('firmware', e); prog.textContent = `${verb} ${t('failed')}: ${e.message}`; }
+    finally { running = false; applyBtn.disabled = false; }
   }
-  dlBtn.addEventListener('click', async () => {
-    const v = dlBtn.dataset.gh ? `v${dlBtn.dataset.gh}` : 'the latest firmware';
-    if (!confirm(`Download ${v} from GitHub and upload it to the DE1? The machine will restart.`)) return;
-    const restore = dlBtn.textContent;
-    dlBtn.textContent = 'Downloading…';
-    try {
-      const buf = await fetch(FW_URL).then((r) => r.arrayBuffer());
-      dlBtn.textContent = 'Uploading to DE1…';
-      const r = await api.uploadFirmware(buf);
-      toast(r.ok ? 'Firmware uploaded — machine restarting' : 'Upload failed');
-    } catch (e) { logger.warn('fw dl', e); toast('Download/upload failed'); }
-    dlBtn.textContent = restore;
-  });
-  ghRow.appendChild(result); ghRow.appendChild(dlBtn);
-  body.appendChild(ghRow);
-  // Auto-check GitHub on open (John's todo: auto-compare vs the connected DE1);
-  // the button stays visible either way — the actual flash stays confirm-gated.
-  result.textContent = 'Checking GitHub for newer firmware…';
-  setTimeout(() => runFwCheck(), 80);
+  async function initFwCheck() {
+    const s = summarizeFirmwareCatalog(await api.getFirmwareCatalog());
+    const ver = s.latestLabel || s.latestBuild;
+    applyBtn.style.display = 'none';
+    if (s.status === 'updateAvailable') {
+      check.textContent = `${t('Update available')}: v${ver}${s.installedBuild != null ? ` (${t('installed')} v${s.installedBuild})` : ''}`;
+      applyBtn.textContent = `${t('Download & install')} v${ver}`;
+      applyBtn.style.display = 'block';
+      applyBtn.onclick = () => { if (confirm(`${t('Install firmware')} v${ver}? ${t('The machine will restart; this takes several minutes.')}`)) runOp((p) => api.applyFirmware(s.artifactId, p), t('Firmware install')); };
+    } else if (s.status === 'upToDate') {
+      check.textContent = `${t('Firmware up to date')}${s.installedBuild != null ? ` (v${s.installedBuild})` : ''}`;
+    } else if (s.status === 'ahead') {
+      check.textContent = `${t('Your firmware is newer than the bundled version')}${s.installedBuild != null ? ` (v${s.installedBuild})` : ''}`;
+    } else {
+      check.textContent = `${t('Could not check for firmware updates')}${s.reason ? ` (${s.reason})` : ''}`;
+    }
+  }
+  setTimeout(() => initFwCheck(), 60);
 
-  // --- manual file upload ---
-  body.appendChild(spEl('p', 's2-sp-sub', 'Or upload a firmware file manually (.dat/.bin). The machine restarts when the update completes.'));
-  // Hide the tiny native file input behind a big, finger-friendly "Choose file" button.
+  // --- manual file upload (developer/recovery path) ---
+  body.appendChild(spEl('p', 's2-sp-sub', t('Or upload a firmware file manually (.dat/.bin). The machine restarts when the update completes.')));
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.dat,.bin,.fw,.dfu'; inp.style.display = 'none';
-  const chooseBtn = spEl('button', 's2-sp-btn grey', 'Choose file…');
-  const fileName = spEl('span', 's2-sp-sub', 'No file chosen'); fileName.style.marginLeft = '28px';
+  const chooseBtn = spEl('button', 's2-sp-btn grey', t('Choose file…'));
+  const fileName = spEl('span', 's2-sp-sub', t('No file chosen')); fileName.style.marginLeft = '28px';
   chooseBtn.addEventListener('click', () => inp.click());
   const fileRow = spEl('div'); fileRow.style.cssText = 'display:flex;align-items:center;margin:14px 0;';
   fileRow.appendChild(chooseBtn); fileRow.appendChild(fileName);
-  const btn = spEl('button', 's2-sp-btn', 'Upload firmware'); btn.disabled = true; btn.style.opacity = '.5';
-  inp.addEventListener('change', () => { fileName.textContent = inp.files.length ? inp.files[0].name : 'No file chosen'; btn.disabled = !inp.files.length; btn.style.opacity = inp.files.length ? '1' : '.5'; });
-  btn.addEventListener('click', () => {
-    if (!inp.files.length) return;
-    if (!confirm(`Upload ${inp.files[0].name} to the DE1? The machine will restart.`)) return;
-    toast('Uploading firmware…');
-    api.uploadFirmware(inp.files[0]).then((r) => toast(r.ok ? 'Firmware uploaded — machine restarting' : 'Upload failed')).catch((e) => { logger.warn('fw', e); toast('Upload failed'); });
-  });
-  body.appendChild(inp); body.appendChild(fileRow); body.appendChild(btn);
+  const upBtn = spEl('button', 's2-sp-btn', t('Upload firmware')); upBtn.disabled = true; upBtn.style.opacity = '.5';
+  inp.addEventListener('change', () => { const has = inp.files.length; fileName.textContent = has ? inp.files[0].name : t('No file chosen'); upBtn.disabled = !has; upBtn.style.opacity = has ? '1' : '.5'; });
+  upBtn.addEventListener('click', () => { if (!inp.files.length) return; if (!confirm(`${t('Upload')} ${inp.files[0].name}? ${t('The machine will restart.')}`)) return; runOp((p) => api.uploadFirmware(inp.files[0], p), t('Upload')); });
+  body.appendChild(inp); body.appendChild(fileRow); body.appendChild(upBtn);
+
+  // --- cancel an in-progress flash ---
+  const cancelBtn = spEl('button', 's2-sp-btn grey', t('Cancel firmware update'));
+  cancelBtn.addEventListener('click', () => api.cancelFirmwareUpdate().catch((e) => logger.warn('fw cancel', e)));
+  body.appendChild(cancelBtn);
 }
 // Calibrate — faithful port of the Tcl default-skin calibrate / calibrate2 /
 // calibrate3 pages, gated behind the same "bad calibration" warning info-page.

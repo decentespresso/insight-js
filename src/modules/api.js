@@ -2,6 +2,7 @@
 // Base derives from the page host so the skin works both served-in-app and
 // served from a dev static server on the same machine as the gateway.
 import { logger } from './logger.js';
+import { splitNdjson, advanceFirmwareState, initialFirmwareState } from './firmware-progress.js';
 
 export const reaHostname = localStorage.getItem('reaHostname') || window.location.hostname || 'localhost';
 export const REA_PORT = 8080;
@@ -65,7 +66,57 @@ export const getSkins = () => j('GET', '/webui/skins');                     // [
 export const getDefaultSkin = () => j('GET', '/webui/skins/default');
 export const setDefaultSkin = (skinId) => j('PUT', '/webui/skins/default', { skinId });
 export const updateSkins = () => fetch(`${API_BASE}/webui/skins/update`, { method: 'POST' }); // re-pull skins from source (self-update)
-export const uploadFirmware = (fileOrBuf) => fetch(`${API_BASE}/machine/firmware`, { method: 'POST', body: fileOrBuf });
+// Firmware — ported from streamline.js (GET catalog + apply/upload NDJSON flow).
+// Bundled firmware catalog + the middleware's own update verdict. Needs no machine
+// connection. Returns null on any failure — the check is informational.
+export async function getFirmwareCatalog() {
+  try {
+    const r = await fetch(`${API_BASE}/machine/firmware`);
+    if (!r.ok) throw new Error(`firmware catalog ${r.status}`);
+    return await r.json();
+  } catch (e) { logger.error('firmware catalog', e); return null; }
+}
+// Drives onProgress from the NDJSON stream both firmware endpoints answer with
+// (erasing -> uploading* -> done | error). Resolves on `done`, rejects on `error`
+// or a truncated stream (a stream ending without `done` = CRC never confirmed).
+async function consumeFirmwareStream(response, onProgress) {
+  if (!response.body?.getReader) return;   // no streaming body -> legacy success
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let state = initialFirmwareState;
+  for (;;) {
+    const { value, done: streamDone } = await reader.read();
+    const chunk = streamDone ? '' : decoder.decode(value, { stream: true });
+    const { events, rest } = splitNdjson(buffer, chunk, streamDone);
+    buffer = rest;
+    for (const event of events) { state = advanceFirmwareState(state, event); if (state.phase) onProgress?.(state); }
+    if (state.phase === 'error') throw new Error(state.error);
+    if (state.phase === 'done') return;
+    if (streamDone) break;
+  }
+  throw new Error('Firmware stream ended before the update was confirmed');
+}
+// Push a raw file to the machine (developer/recovery path).
+export async function uploadFirmware(firmwareFile, onProgress) {
+  const r = await fetch(`${API_BASE}/machine/firmware`, { method: 'POST', body: firmwareFile });
+  if (!r.ok) { const m = { 400: 'Firmware file is empty', 409: 'A firmware update is already in progress', 503: 'No machine connected' }; throw new Error(m[r.status] || `Failed to upload firmware (${r.status})`); }
+  return consumeFirmwareStream(r, onProgress);
+}
+// Flash a bundled catalog artifact by id (the "Update" button path). `force`
+// bypasses only the version-newer policy, never integrity/compat checks.
+export async function applyFirmware(artifactId, onProgress, force = false) {
+  const r = await fetch(`${API_BASE}/machine/firmware/apply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ artifactId, force }) });
+  if (!r.ok) { const m = { 400: 'Missing or malformed artifact ID', 404: 'Unknown firmware artifact', 409: 'A firmware update is already in progress', 422: 'Firmware artifact failed validation', 503: 'No machine connected' }; throw new Error(m[r.status] || `Failed to apply firmware (${r.status})`); }
+  return consumeFirmwareStream(r, onProgress);
+}
+// Cancel an in-progress update; idempotent. The firmware stream's own `error`
+// event is what resolves the in-flight upload/apply promise.
+export async function cancelFirmwareUpdate() {
+  const r = await fetch(`${API_BASE}/machine/firmware`, { method: 'DELETE' });
+  if (!r.ok) throw new Error(`Failed to cancel firmware update (${r.status})`);
+  return r.json();
+}
 export const enablePlugin = (id) => fetch(`${API_BASE}/plugins/${encodeURIComponent(id)}/enable`, { method: 'POST' });
 export const disablePlugin = (id) => fetch(`${API_BASE}/plugins/${encodeURIComponent(id)}/disable`, { method: 'POST' });
 
