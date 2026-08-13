@@ -5,7 +5,17 @@
 // Each panel has its own x-axis, coloured to match the panel, exactly like the
 // Tcl Insight skin. Lines are angular (linear), not splined.
 import { logger } from './logger.js';
-import { t, tempSym } from './i18n.js';
+import { t, tempSym, tempIsF, cToUnit } from './i18n.js';
+
+// Temperature display helpers. Buffers/profiles hold Celsius; the chart shows the
+// user's unit, so both the plotted y-values and the axis range/ticks convert.
+const cTemp = (v) => (v == null ? null : cToUnit(v));            // null-safe (temp traces carry nulls)
+const cTempArr = (a) => (Array.isArray(a) ? a.map(cTemp) : a);
+// yaxis3 range/ticks for the 3-panel temp panel, in the active unit.
+const tempAxisCfg = () => (tempIsF()
+  ? { range: [cToUnit(79), cToUnit(93)], tickvals: [176, 185, 194] }
+  : { range: [79, 93], tickvals: [80, 85, 90] });
+const tempTitleText = () => `${t('Temperature')} (${tempSym()})`;
 
 const COL = {
   pressure: '#00b672', flow: '#6c9bff', temp: '#ff7880', weight: '#a2693d',
@@ -61,20 +71,21 @@ export class EspressoChart {
       xaxis3: { ...xAxis(COL.temp, 'y3'), matches: 'x' },
       yaxis: yAxis(COL.pressure, [0.74, 0.99], { range: [0, 12], tickvals: [1, 3, 5, 7, 9, 11] }),
       yaxis2: yAxis(COL.flow, [0.40, 0.65], { range: [0, 8.01], tickvals: [1, 2, 3, 4, 5, 6, 7, 8] }),
-      yaxis3: yAxis(COL.temp, [0.06, 0.31], { range: [79, 93], tickvals: [80, 85, 90] }),
+      yaxis3: yAxis(COL.temp, [0.06, 0.31], tempAxisCfg()),
       annotations: [
         // smaller title font (34 vs 40) plus a few-px lift above each panel top
         // keeps the label clear of the top y-tick number (11 / 8 / 90).
         title(t('Pressure (bar)'), COL.pressure, 0.996),
         title(t('Flow (mL/s)'), COL.flow, 0.656),
-        title(`${t('Temperature')} (${tempSym()})`, COL.temp, 0.316),
+        title(tempTitleText(), COL.temp, 0.316),
       ],
       datarevision: 0 };
     this.config = { displayModeBar: false, responsive: true, staticPlot: true };
     Plotly.newPlot(this.el, this.traces, this.layout, this.config);
   }
   render(b) {
-    const map = [b.p, b.pg, b.f, b.fg, b.w, b.T, b.Tg];
+    // temp traces (5=temp, 6=temp-goal) convert C -> display unit to match yaxis3.
+    const map = [b.p, b.pg, b.f, b.fg, b.w, cTempArr(b.T), cTempArr(b.Tg)];
     this.traces.forEach((tr, i) => { tr.x = b.t; tr.y = map[i]; });
     this.layout.datarevision++;
     Plotly.react(this.el, this.traces, this.layout, this.config);
@@ -84,10 +95,23 @@ export class EspressoChart {
   renderPreview(c) {
     this.traces[0].x = c.t; this.traces[0].y = c.p;   // pressure (solid)
     this.traces[2].x = c.t; this.traces[2].y = c.f;   // flow (solid)
-    this.traces[5].x = c.t; this.traces[5].y = c.T;   // temperature (solid)
+    this.traces[5].x = c.t; this.traces[5].y = cTempArr(c.T);   // temperature (solid), C -> unit
     [1, 3, 4, 6].forEach((i) => { this.traces[i].x = []; this.traces[i].y = []; });
     this.layout.datarevision++;
     Plotly.react(this.el, this.traces, this.layout, this.config);
+  }
+  // Re-apply unit + language to the temp axis and panel titles (called when the
+  // user changes Misc units or language — the chart persists across page redraws).
+  relabel() {
+    const ta = tempAxisCfg();
+    Object.assign(this.layout.yaxis3, ta);
+    this.layout.annotations[0].text = t('Pressure (bar)');
+    this.layout.annotations[1].text = t('Flow (mL/s)');
+    this.layout.annotations[2].text = tempTitleText();
+    this.layout.datarevision++;
+    // Axis + titles only; the caller re-renders the (Celsius) buffer, which
+    // re-converts the temp traces to the new unit via render()/renderPreview().
+    try { Plotly.relayout(this.el, { 'yaxis3.range': ta.range, 'yaxis3.tickvals': ta.tickvals, annotations: this.layout.annotations }); } catch (e) { logger.warn('relabel', e); }
   }
   // Insight Dark: the chart sits on a dark card, so swap the white plot fill +
   // light grid for dark equivalents (the coloured lines/axes read fine on both).
@@ -113,7 +137,7 @@ export class MiniChart {
     this.config = { displayModeBar: false, responsive: true, staticPlot: true };
     Plotly.newPlot(this.el, this.traces, this.layout, this.config);
   }
-  render(buf) { this.traces.forEach((tr, i) => { tr.x = buf.t; tr.y = buf[this.series[i].key]; }); this.layout.datarevision++; Plotly.react(this.el, this.traces, this.layout, this.config); }
+  render(buf) { this.traces.forEach((tr, i) => { const k = this.series[i].key; tr.x = buf.t; tr.y = (k === 'temp' || k === 'T') ? cTempArr(buf[k]) : buf[k]; }); this.layout.datarevision++; Plotly.react(this.el, this.traces, this.layout, this.config); }
   setTheme(theme) { applyChartTheme(this, theme, ['xaxis', 'yaxis']); }
   resize() { try { Plotly.Plots.resize(this.el); } catch (e) { logger.warn('resize', e); } }
 }
@@ -135,8 +159,8 @@ export class ZoomChart {
       this.layout = { margin: { l: 84, r: 20, t: 60, b: 60 }, showlegend: false,
         paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: COL.bg,
         xaxis: zAxis('y', COL.temp, { dtick: 100, rangemode: 'tozero', autorange: true }),
-        yaxis: zAxis('x', COL.temp, { domain: [0, 1], range: [78, 92], tickvals: [80, 85, 90] }),
-        annotations: [zTitle(`${t('Temperature')} (${tempSym()})`, COL.temp, -0.03, 'left')], datarevision: 0 };
+        yaxis: zAxis('x', COL.temp, { domain: [0, 1], range: [cToUnit(78), cToUnit(92)], tickvals: tempIsF() ? [176, 185, 194] : [80, 85, 90] }),
+        annotations: [zTitle(tempTitleText(), COL.temp, -0.03, 'left')], datarevision: 0 };
     } else {
       const res = trace('#d2d200', 'x', 'y', 'dash', 5); res.visible = false; // puck resistance
       this.traces = [trace(COL.pressure, 'x', 'y', null, 13), trace(COL.pressure, 'x', 'y', 'dash', 6),
@@ -155,14 +179,14 @@ export class ZoomChart {
     Plotly.newPlot(this.el, this.traces, this.layout, this.config);
   }
   render(b) {
-    const map = this.mode === 'temp' ? [b.T, b.Tg] : [b.p, b.pg, b.f, b.fg, b.w, b.r];
+    const map = this.mode === 'temp' ? [cTempArr(b.T), cTempArr(b.Tg)] : [b.p, b.pg, b.f, b.fg, b.w, b.r];
     this.traces.forEach((tr, i) => { tr.x = b.t; tr.y = map[i]; });
     this.layout.datarevision++;
     Plotly.react(this.el, this.traces, this.layout, this.config);
   }
   renderPreview(c) {
     if (this.mode === 'temp') {
-      this.traces[0].x = c.t; this.traces[0].y = c.T; this.traces[1].x = []; this.traces[1].y = [];
+      this.traces[0].x = c.t; this.traces[0].y = cTempArr(c.T); this.traces[1].x = []; this.traces[1].y = [];
     } else {
       this.traces[0].x = c.t; this.traces[0].y = c.p;   // pressure (solid)
       this.traces[2].x = c.t; this.traces[2].y = c.f;   // flow (solid)
@@ -180,11 +204,25 @@ export class ZoomChart {
     this.layout.datarevision++;
     Plotly.react(this.el, this.traces, this.layout, this.config);
   }
-  // change the temperature-zoom Y-axis scale (temp mode only)
+  // change the temperature-zoom Y-axis scale (temp mode only). `range` is Celsius
+  // (the app's TEMP_RANGES levels); convert to the display unit for the axis.
   setTempRange(range) {
     if (this.mode !== 'temp') return;
-    this.layout.yaxis.range = range.slice(); this.layout.yaxis.autorange = false;
-    Plotly.relayout(this.el, { 'yaxis.range': range.slice() });
+    const r = range.map(cToUnit);
+    this.layout.yaxis.range = r; this.layout.yaxis.autorange = false;
+    Plotly.relayout(this.el, { 'yaxis.range': r });
+  }
+  // Re-apply unit + language to the zoom titles/ticks (units/language change).
+  relabel() {
+    if (this.mode === 'temp') {
+      this.layout.yaxis.tickvals = tempIsF() ? [176, 185, 194] : [80, 85, 90];
+      this.layout.annotations[0].text = tempTitleText();
+      try { Plotly.relayout(this.el, { 'yaxis.tickvals': this.layout.yaxis.tickvals, annotations: this.layout.annotations }); } catch (e) { logger.warn('zrelabel', e); }
+    } else {
+      this.layout.annotations[0].text = t('Flow (mL/s)');
+      this.layout.annotations[2].text = t('Pressure (bar)');
+      try { Plotly.relayout(this.el, { annotations: this.layout.annotations }); } catch (e) { logger.warn('zrelabel', e); }
+    }
   }
   setTheme(theme) { applyChartTheme(this, theme, ['xaxis', 'yaxis']); }
   resize() { try { Plotly.Plots.resize(this.el); } catch (e) { logger.warn('resize', e); } }

@@ -11,7 +11,7 @@ import { openSettings, isSettingsOpen, settingsGoto, closeSettings, settingsShow
 import { openProfileEditor } from '../views/profile_editor.js';
 import { openNumpad } from '../views/numpad.js';
 import { openSaver, closeSaver, isSaverOpen } from '../views/saver.js';
-import { initI18n } from './i18n.js';
+import { initI18n, t, tempSym } from './i18n.js';
 
 setDebug(true);
 
@@ -198,7 +198,15 @@ window.addEventListener('popstate', applyRoute);
 window.addEventListener('hashchange', applyRoute);
 // Language change (from Settings › Language): re-render the current page so the
 // i18n-bound labels (tab names, etc.) pick up the new language.
-window.addEventListener('insight-langchange', () => { if (live.pageState) showPage(live.pageState); });
+// Re-apply the chart axis titles + temperature unit, then re-render the page so
+// every i18n-bound label (tabs, card) and the (Celsius) chart buffer pick up the
+// new language / unit. Shared by the language and the Misc units-toggle events.
+function relabelAndRedraw() {
+  for (const id in host.graphs) { const g = host.graphs[id]; if (g && g.relabel) g.relabel(); }
+  if (live.pageState) showPage(live.pageState);
+}
+window.addEventListener('insight-langchange', relabelAndRedraw);
+window.addEventListener('insight-unitschange', relabelAndRedraw);
 // Settings loaded a different profile onto the DE1 — re-read the workflow so the
 // espresso page (title / type / preview curve) reflects the newly-loaded profile.
 window.addEventListener('insight-workflow-changed', () => { loadWorkflow(); });
@@ -268,8 +276,8 @@ const host = new PageHost(stage, config, actions);
 host.registerGraph('espresso_chart', (n) => new EspressoChart(n));
 host.registerGraph('zoom_pf', (n) => new ZoomChart(n, 'pf'));
 host.registerGraph('zoom_temp', (n) => new ZoomChart(n, 'temp'));
-host.registerGraph('steam_mini', (n) => new MiniChart(n, { series: [{ key: 'temp', color: '#ff7880' }], title: 'Steam temperature (°C)', titleColor: '#ff7880' }));
-host.registerGraph('water_mini', (n) => new MiniChart(n, { series: [{ key: 'temp', color: '#ff7880' }, { key: 'w', color: '#a2693d' }], title: 'Temperature (°C) · weight (g)', titleColor: '#ff7880' }));
+host.registerGraph('steam_mini', (n) => new MiniChart(n, { series: [{ key: 'temp', color: '#ff7880' }], title: `${t('Steam temperature')} (${tempSym()})`, titleColor: '#ff7880' }));
+host.registerGraph('water_mini', (n) => new MiniChart(n, { series: [{ key: 'temp', color: '#ff7880' }, { key: 'w', color: '#a2693d' }], title: `${t('Temperature')} (${tempSym()}) · ${t('weight')} (g)`, titleColor: '#ff7880' }));
 
 async function loadWorkflow() {
   try {

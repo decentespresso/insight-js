@@ -1222,9 +1222,9 @@ function miscPanel(body) {
   slider(340, 740, 800, 0, 120, ivMin(), (v) => { const n = Math.round(v); set('insight_saver_interval_sec', n * 60); ival.textContent = `${t('Change image every')}: ${n} ${t('minutes')}`; });
 
   // ===== RIGHT COLUMN =====
-  // Celsius / Fahrenheit — client-side unit preference (no reaprime field; the
-  // Streamline skin leaves this inert too). Shares the existing 'units' key.
-  seg(2280, 480, 600, 80, ['Celsius', 'Fahrenheit'], g('units', 'c') === 'f' ? 1 : 0, (i) => set('units', i === 1 ? 'f' : 'c'), { anchor: 'ne' });
+  // Celsius / Fahrenheit — client-side display unit (values stay Celsius for the
+  // machine). Broadcasts insight-unitschange so the brew pages + charts re-render.
+  seg(2280, 480, 600, 80, ['Celsius', 'Fahrenheit'], g('units', 'c') === 'f' ? 1 : 0, (i) => { set('units', i === 1 ? 'f' : 'c'); window.dispatchEvent(new Event('insight-unitschange')); }, { anchor: 'ne' });
   // AM/PM — overrides the OS locale for the keep-hot schedule clock (is12h()).
   const ampmOn = () => { const o = localStorage.getItem('insight_ampm'); return o === '1' || (o == null && is12h()); };
   toggleRow(1280, 506, 1420, 504, 'AM/PM', ampmOn(), (v) => set('insight_ampm', v ? '1' : '0'));
