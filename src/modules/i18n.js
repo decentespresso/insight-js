@@ -57,6 +57,18 @@ export function t(key) {
 export function currentLangCode() { return currentLanguage; }
 export function currentLangName() { return CODE_TO_NAME[currentLanguage] || 'English'; }
 
+// Temperature units. Values are stored/sent to the machine in Celsius (reaprime);
+// only the DISPLAY converts to the user's Misc "Celsius/Fahrenheit" choice.
+export const tempIsF = () => localStorage.getItem('units') === 'f';
+export const tempSym = () => (tempIsF() ? '°F' : '°C');
+// Celsius -> user's unit (number only).
+export const cToUnit = (c) => (tempIsF() ? (+c * 9) / 5 + 32 : +c);
+// Format a Celsius value for display in the user's unit, with the ° suffix.
+export function fmtTemp(c, dec = 1) {
+  if (c == null || !Number.isFinite(+c)) return '';
+  return `${cToUnit(c).toFixed(dec)}${tempSym()}`;
+}
+
 export function setLang(nameOrCode) {
   const code = NAME_TO_CODE[nameOrCode] || (supportedLanguages.includes(nameOrCode) ? nameOrCode : 'en');
   currentLanguage = code;

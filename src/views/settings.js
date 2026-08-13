@@ -16,7 +16,7 @@ import { renderProfileEditor, hideProfileEditor, removeProfileEditor, ppTempAdju
 import { renderAdvancedEditor, hideAdvancedEditor, removeAdvancedEditor, reaStepToFlat, advProfileToRea } from './advanced_editor.js';
 import { parsePressure } from '../config/pressure_profile.js';
 import { parseFlow } from '../config/flow_profile.js';
-import { setLang, currentLangName, currentLangCode, LANGUAGES, t } from '../modules/i18n.js';
+import { setLang, currentLangName, currentLangCode, LANGUAGES, t, fmtTemp } from '../modules/i18n.js';
 import { logger } from '../modules/logger.js';
 import { summarizeFirmwareCatalog } from '../modules/firmware-progress.js';
 
@@ -173,7 +173,7 @@ const presetEls = [
   // + [2404,192,2590,320], - [2404,600,2590,730], temp text at (2470,600) centre.
   B(P1, [2404, 192, 2590, 320], 'previewTempUp'),
   B(P1, [2404, 600, 2590, 730], 'previewTempDown'),
-  V(P1, 2470, 600, { anchor: 'center', size: 44, weight: 'bold', fill: '#7f879a', bind: (l) => `${Math.round(l.previewTemp ?? 92)}°C` }),
+  V(P1, 2470, 600, { anchor: 'center', size: 44, weight: 'bold', fill: '#7f879a', bind: (l) => fmtTemp(l.previewTemp ?? 92, 0) }),
   // Description card [1325,804,2528,1213] — scrollable box (finger scrollbar on overflow)
   V(P1, 1360, 839, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Description') }),
   V(P1, 1360, 925, { size: 34, fill: C.muted, width: 1140, wrap: true, scroll: 250, bind: (l) => l.presetDesc || '' }),
@@ -463,7 +463,7 @@ let metalTemp = null, snapSub = null;
 const scaleStateEls = [];   // state <div>s of connected scales
 const machineStateEls = []; // state <div>s of connected machines
 const scaleStateText = () => `<b>${t('connected')}</b> : ${scaleWeight != null ? scaleWeight.toFixed(1) : '—'} g`;
-const machineStateText = () => `<b>${t('connected')}</b> : ${metalTemp != null ? metalTemp.toFixed(1) : '—'} °C`;
+const machineStateText = () => `<b>${t('connected')}</b> : ${metalTemp != null ? fmtTemp(metalTemp) : '—'}`;
 function ensureScaleSub() {
   if (scaleSub) return;
   scaleSub = api.connectScale((d) => { if (typeof d.weight === 'number') { scaleWeight = d.weight; for (const el of scaleStateEls) el.innerHTML = scaleStateText(); } });

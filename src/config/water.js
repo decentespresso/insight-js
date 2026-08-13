@@ -2,7 +2,7 @@
 // thermometer = temperature clicker, with big blue values + captions. Middle card:
 // WAIT/START ring + mode label + "Flow rate max" row. All text is an overlay — the
 // background image carries only the glass/thermometer/ring/beaker graphics.
-import { t } from '../modules/i18n.js';
+import { t, fmtTemp } from '../modules/i18n.js';
 const n0 = (v) => (typeof v === 'number' ? Math.round(v) : 0);
 const n1 = (v) => (typeof v === 'number' ? v.toFixed(1) : '0.0');
 const C = { title: '#5e5d6f', val: '#4979e9', wait: '#2d3046', mode: '#969eb1', slabel: '#7e8496', sval: '#9aa0b0' };
@@ -32,7 +32,7 @@ export const waterConfig = {
       adj: { key: 'waterTemp', delta: +1, min: 20, max: 110, set: (v) => ({ hotWaterData: { targetTemperature: v } }) } },
     { kind: 'button', pages: ['water_1'], rect: [551, 815, 1000, 1180], action: 'adjust',
       adj: { key: 'waterTemp', delta: -1, min: 20, max: 110, set: (v) => ({ hotWaterData: { targetTemperature: v } }) } },
-    row(['water_1'], 760, 1238, 'center', C.val, (l) => `${n1(l.waterTemp)}°C`, { size: F.val, weight: 'bold' }),
+    row(['water_1'], 760, 1238, 'center', C.val, (l) => `${fmtTemp(l.waterTemp)}`, { size: F.val, weight: 'bold' }),
     row(['water_1'], 760, 1292, 'center', C.val, () => t('TEMP'), { size: F.cap, spacing: 2 }),
     { kind: 'button', pages: ['water_1'], rect: [551, 1198, 1000, 1320], action: 'numpad',
       np: { title: 'TEMP', key: 'waterTemp', min: 20, max: 110, step: 1, bigStep: 10, set: (v) => ({ hotWaterData: { targetTemperature: v } }) } },

@@ -5,6 +5,7 @@
 // Each panel has its own x-axis, coloured to match the panel, exactly like the
 // Tcl Insight skin. Lines are angular (linear), not splined.
 import { logger } from './logger.js';
+import { t, tempSym } from './i18n.js';
 
 const COL = {
   pressure: '#00b672', flow: '#6c9bff', temp: '#ff7880', weight: '#a2693d',
@@ -64,9 +65,9 @@ export class EspressoChart {
       annotations: [
         // smaller title font (34 vs 40) plus a few-px lift above each panel top
         // keeps the label clear of the top y-tick number (11 / 8 / 90).
-        title('Pressure (bar)', COL.pressure, 0.996),
-        title('Flow (mL/s)', COL.flow, 0.656),
-        title('Temperature (°C)', COL.temp, 0.316),
+        title(t('Pressure (bar)'), COL.pressure, 0.996),
+        title(t('Flow (mL/s)'), COL.flow, 0.656),
+        title(`${t('Temperature')} (${tempSym()})`, COL.temp, 0.316),
       ],
       datarevision: 0 };
     this.config = { displayModeBar: false, responsive: true, staticPlot: true };
@@ -135,7 +136,7 @@ export class ZoomChart {
         paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: COL.bg,
         xaxis: zAxis('y', COL.temp, { dtick: 100, rangemode: 'tozero', autorange: true }),
         yaxis: zAxis('x', COL.temp, { domain: [0, 1], range: [78, 92], tickvals: [80, 85, 90] }),
-        annotations: [zTitle('Temperature (°C)', COL.temp, -0.03, 'left')], datarevision: 0 };
+        annotations: [zTitle(`${t('Temperature')} (${tempSym()})`, COL.temp, -0.03, 'left')], datarevision: 0 };
     } else {
       const res = trace('#d2d200', 'x', 'y', 'dash', 5); res.visible = false; // puck resistance
       this.traces = [trace(COL.pressure, 'x', 'y', null, 13), trace(COL.pressure, 'x', 'y', 'dash', 6),
@@ -145,9 +146,9 @@ export class ZoomChart {
         xaxis: zAxis('y', GREY, { dtick: 100, rangemode: 'tozero', autorange: true }),
         yaxis: zAxis('x', GREY, { domain: [0, 1], range: [0, 12], dtick: 1 }),
         annotations: [
-          zTitle('Flow (mL/s)', COL.flow, -0.03, 'left'),
-          zTitle('☐ Resistance', '#d2d200', 0.6, 'center'),
-          zTitle('Pressure (bar)', COL.pressure, 1, 'right'),
+          zTitle(t('Flow (mL/s)'), COL.flow, -0.03, 'left'),
+          zTitle(`☐ ${t('Resistance')}`, '#d2d200', 0.6, 'center'),
+          zTitle(t('Pressure (bar)'), COL.pressure, 1, 'right'),
         ], datarevision: 0 };
     }
     this.config = { displayModeBar: false, responsive: true, staticPlot: true };
@@ -175,7 +176,7 @@ export class ZoomChart {
     if (this.mode !== 'pf' || !this.traces[5]) return;
     this.traces[5].visible = on;
     if (on && b) { this.traces[5].x = b.t; this.traces[5].y = b.r; }
-    this.layout.annotations[1].text = (on ? '☑' : '☐') + ' Resistance';
+    this.layout.annotations[1].text = (on ? '☑' : '☐') + ' ' + t('Resistance');
     this.layout.datarevision++;
     Plotly.react(this.el, this.traces, this.layout, this.config);
   }

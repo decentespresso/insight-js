@@ -5,7 +5,7 @@
 import { openNumpad } from './numpad.js';
 import { openModal, closeModal } from '../modules/overlay.js';
 import { MiniChart } from '../modules/chart.js';
-import { t } from '../modules/i18n.js';
+import { t, fmtTemp } from '../modules/i18n.js';
 import { logger } from '../modules/logger.js';
 
 const BLUE = '#4e85f4', GREY = '#7f879a';
@@ -102,7 +102,7 @@ const TITLES = [
 // returns the numpad spec (field/min/max/decimals) for that blue number.
 const CTRL = [
   // card 1
-  { cx: 1070, subY: 680, valY: 744, sub: () => 'goal', val: (s) => `${r0(s.temperature)}°C`,
+  { cx: 1070, subY: 680, valY: 744, sub: () => 'goal', val: (s) => fmtTemp(s.temperature, 0),
     zones: [{ r: [980, 310, 1150, 475], act: 'tempUp' }, { r: [980, 475, 1150, 640], act: 'tempDown' }],
     np: [980, 650, 1150, 780], tap: () => ({ title: 'Temperature', field: 'temperature', min: 0, max: 105, dec: 1, step: 0.5, bigStep: 10 }) },
   { cx: 1380, subY: 680, valY: 744, sub: () => 'sensor', val: (s) => t(s.sensor || 'coffee'),

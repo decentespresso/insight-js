@@ -7,7 +7,7 @@
 import { LIMITS, buildPressureSteps, pressureCurve, parsePressure } from '../config/pressure_profile.js';
 import { FLOW_LIMITS, buildFlowSteps, flowCurve, parseFlow } from '../config/flow_profile.js';
 import { openNumpad } from './numpad.js';
-import { t } from '../modules/i18n.js';
+import { t, fmtTemp } from '../modules/i18n.js';
 import { logger } from '../modules/logger.js';
 
 const BLUE = '#4e85f4', GREY = '#7f879a';
@@ -188,11 +188,11 @@ function refresh(live) {
   const p = live._pp;
   for (const k in els.valEls) els.valEls[k].el.textContent = els.valEls[k].fmt(p);
   if (p.tempSteps) {
-    els.tempEls[0].textContent = `${r0(p.temp1)}°C`;
-    els.tempEls[1].textContent = `${r0(p.temp2)}°C`;
-    els.tempEls[2].textContent = `${r0(p.temp3)}°C`;
+    els.tempEls[0].textContent = fmtTemp(p.temp1, 0);
+    els.tempEls[1].textContent = fmtTemp(p.temp2, 0);
+    els.tempEls[2].textContent = fmtTemp(p.temp3, 0);
   } else els.tempEls.forEach((d) => { d.textContent = ''; });
-  els.mainTemp.textContent = `${r0(p.temp)}°C`;
+  els.mainTemp.textContent = fmtTemp(p.temp, 0);
   for (const k in els.sliderEls) {
     const { thumb, spec: ss } = els.sliderEls[k];
     const { min, max } = ss.lim;

@@ -2,7 +2,7 @@
 // Consumed by PageHost. Elements: tap-zone buttons, live-text variables (bound
 // to the `live` object), and the graph mount. Backgrounds & coordinates come
 // straight from the extracted INSIGHT coordinate map.
-import { t } from '../modules/i18n.js';
+import { t, fmtTemp } from '../modules/i18n.js';
 const IMG = 'assets/insight/';
 const F = { data: 44, label: 34, button: 80, sub: 42, prof: 40, step: 30 };
 const C = { data: '#42465c', lighter: '#969eb1', dark: '#5a5d75', button: '#2d3046' };
@@ -92,16 +92,16 @@ export const espressoConfig = {
 
     // ---- READY / DONE card (off / espresso_3): Temperature goal/metal + profile ----
     row(CARDOFF, 2060, 948, 'nw', C.dark, () => t('Temperature'), { weight: 'bold' }),
-    row(CARDOFF, 2060, 986, 'nw', C.lighter, (l) => `${n1(l.targetTemp)}°C ${t('goal')}`),
-    row(CARDOFF, 2060, 1024, 'nw', C.lighter, (l) => `${n1(l.metalTemp)}°C ${t('metal')}`),
+    row(CARDOFF, 2060, 986, 'nw', C.lighter, (l) => `${fmtTemp(l.targetTemp)} ${t('goal')}`),
+    row(CARDOFF, 2060, 1024, 'nw', C.lighter, (l) => `${fmtTemp(l.metalTemp)} ${t('metal')}`),
     row(CARDOFF, 2060, 1080, 'nw', C.dark, (l) => t(l.profileType || 'Profile'), { weight: 'bold' }),
     row(CARDOFF, 2060, 1118, 'nw', C.lighter, (l) => wrap(l.profileTitle, 29, 0)),
     row(CARDOFF, 2060, 1156, 'nw', C.lighter, (l) => wrap(l.profileTitle, 29, 1)),
 
     // ---- RUNNING card (espresso): Temperature goal/coffee + Flow + profile + Current step ----
     row(ERUN, 2060, cy(4.5), 'nw', C.dark, () => t('Temperature'), { weight: 'bold' }),
-    row(ERUN, 2060, cy(5.5), 'nw', C.lighter, (l) => `${n1(l.targetTemp)}°C ${t('goal')}`),
-    row(ERUN, 2060, cy(6.5), 'nw', C.lighter, (l) => `${n1(l.coffeeTemp)}°C ${t('coffee')}`),
+    row(ERUN, 2060, cy(5.5), 'nw', C.lighter, (l) => `${fmtTemp(l.targetTemp)} ${t('goal')}`),
+    row(ERUN, 2060, cy(6.5), 'nw', C.lighter, (l) => `${fmtTemp(l.coffeeTemp)} ${t('coffee')}`),
     row(ERUN, 2060, cy(8), 'nw', C.dark, () => t('Flow'), { weight: 'bold' }),
     row(ERUN, 2060, cy(9), 'nw', C.lighter, (l) => `${n1(l.flow)} mL/s`),
     row(ERUN, 2060, cy(10), 'nw', C.lighter, (l) => `${n1(l.pressure)} bar`),

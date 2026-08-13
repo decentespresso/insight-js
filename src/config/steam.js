@@ -2,7 +2,7 @@
 // auto-off-time clicker (+ top / - bottom), big blue value + caption below. Middle
 // card: WAIT/START ring + mode label + a 4-row settings block (Enabled toggle,
 // Preheat, Temperature, Flow rate max). Text/toggle are overlays on the image.
-import { t } from '../modules/i18n.js';
+import { t, fmtTemp } from '../modules/i18n.js';
 const n0 = (v) => (typeof v === 'number' ? Math.round(v) : 0);
 const n1 = (v) => (typeof v === 'number' ? v.toFixed(1) : '0.0');
 const C = { title: '#5e5d6f', val: '#4979e9', wait: '#2d3046', mode: '#969eb1', slabel: '#7e8496', sval: '#9aa0b0' };
@@ -46,14 +46,14 @@ export const steamConfig = {
     // Preheat target = the steam heater setpoint (reaprime targetTemperature); "off"
     // when disabled (the toggle sends target-temp 0, so the heater isn't kept hot).
     row(['steam_1'], 1096, 1218, 'nw', C.slabel, () => t('Preheat to'), { size: F.set }),
-    row(['steam_1'], 1690, 1218, 'ne', C.sval, (l) => (l.steamEnabled === false ? t('off') : `${n0(l.steamTarget)}°C`), { size: F.set }),
+    row(['steam_1'], 1690, 1218, 'ne', C.sval, (l) => (l.steamEnabled === false ? t('off') : `${fmtTemp(l.steamTarget, 0)}`), { size: F.set }),
     row(['steam_1'], 1096, 1270, 'nw', C.slabel, () => t('Temperature'), { size: F.set }),
-    row(['steam_1'], 1690, 1270, 'ne', C.sval, (l) => `${n1(l.steamTemp > 0 ? l.steamTemp : l.steamTarget)}°C`, { size: F.set }),
+    row(['steam_1'], 1690, 1270, 'ne', C.sval, (l) => `${fmtTemp(l.steamTemp > 0 ? l.steamTemp : l.steamTarget)}`, { size: F.set }),
     row(['steam_1'], 1096, 1318, 'nw', C.slabel, () => t('Flow rate max'), { size: F.set }),
     row(['steam_1'], 1690, 1318, 'ne', C.sval, (l) => `${n1(l.steamFlowMax)} mL/s`, { size: F.set }),
 
     // ---- live steam temp on running page (stacked under STOP / STEAM in the ring) ----
-    row(['steam'], 1394, 946, 'center', C.title, (l) => `${n0(l.steamTemp)}°C`, { size: 46 }),
+    row(['steam'], 1394, 946, 'center', C.title, (l) => `${fmtTemp(l.steamTemp, 0)}`, { size: 46 }),
     // ---- live mini temperature graph (left card area) on the running page ----
     { kind: 'graph', id: 'steam_mini', pages: ['steam'], rect: [110, 470, 940, 1180] },
 
