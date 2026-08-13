@@ -387,23 +387,29 @@ const LIMITS = [
     min: 0, max: 10, step: 1, bigStep: 1, dec: 0, unit: '', c: 't', special: 'countStart', grey: true },
   { key: 'target_volume', title: 'After preinfusion, stop the shot at:', x: 970, w: 1500, ty: 530, sy: 600, vy: 720,
     min: 0, max: 2000, step: 1, bigStep: 10, dec: 0, unit: 'mL', c: 't', fmt: (v) => (v > 0 ? `${r0(v)} mL` : t('off')) },
-  { key: 'maximum_flow_range_advanced', title: 'Limit flow range', x: 70, w: 700, ty: 830, sy: 900, vy: 1020,
-    min: 0.1, max: 8, step: 0.1, bigStep: 1, dec: 1, unit: 'mL/s', c: 't', fmt: (v) => `${n1(v)} mL/s` },
-  { key: 'maximum_pressure_range_advanced', title: 'Limit pressure range', x: 800, w: 700, ty: 830, sy: 900, vy: 1020,
-    min: 0.1, max: 8, step: 0.1, bigStep: 1, dec: 1, unit: 'bar', c: 't', fmt: (v) => `${n1(v)} bar` },
+  // Limiter Tolerance = a limited step's limiter.range (Streamline's SETTINGS page).
+  // The mL/s tolerance applies to pressure-pump steps (their limiter caps flow);
+  // the bar tolerance applies to flow-pump steps (their limiter caps pressure).
+  { key: 'maximum_flow_range_advanced', title: 'Limiter Tolerance (mL/s)', x: 70, w: 700, ty: 830, sy: 900, vy: 1020,
+    min: 0, max: 5, step: 0.1, bigStep: 1, dec: 1, unit: 'mL/s', c: 't', fmt: (v) => `${n1(v)} mL/s` },
+  { key: 'maximum_pressure_range_advanced', title: 'Limiter Tolerance (bar)', x: 800, w: 700, ty: 830, sy: 900, vy: 1020,
+    min: 0, max: 5, step: 0.1, bigStep: 1, dec: 1, unit: 'bar', c: 't', fmt: (v) => `${n1(v)} bar` },
   { key: 'target_weight', title: 'Stop at weight', x: 70, w: 2400, ty: 1130, sy: 1200, vy: 1320,
     min: 0, max: 2000, step: 0.2, bigStep: 1, dec: 1, unit: 'g', c: 't', fmt: (v) => `${n1(v)}g` },
 ];
 let limitEls;
+// Limiter tolerance reads/writes limiter.range on the steps whose limiter matches
+// the axis: mL/s tolerance -> pressure-pump steps (flow-capped), bar tolerance ->
+// flow-pump steps (pressure-capped). Falls back to Streamline's 0.6 default.
+const TOL_PUMP = { maximum_flow_range_advanced: 'pressure', maximum_pressure_range_advanced: 'flow' };
 function limVal(key) {
   const p = live._advProfile;
-  if (key === 'maximum_flow_range_advanced') return Number((p.steps || []).find((s) => s.max_flow_or_pressure_range > 0)?.max_flow_or_pressure_range) || 0.6;
-  if (key === 'maximum_pressure_range_advanced') return Number((p.steps || []).find((s) => s.max_flow_or_pressure_range > 0)?.max_flow_or_pressure_range) || 0.9;
+  if (TOL_PUMP[key]) { const s = (p.steps || []).find((st) => st.pump === TOL_PUMP[key] && st.max_flow_or_pressure > 0); return Number(s?.max_flow_or_pressure_range) || 0.6; }
   return Number(p[key]) || 0;
 }
 function limSet(key, v) {
   const p = live._advProfile;
-  if (key === 'maximum_flow_range_advanced' || key === 'maximum_pressure_range_advanced') { (p.steps || []).forEach((s) => { if (s.max_flow_or_pressure > 0) s.max_flow_or_pressure_range = v; }); }
+  if (TOL_PUMP[key]) { (p.steps || []).forEach((s) => { if (s.pump === TOL_PUMP[key] && s.max_flow_or_pressure > 0) s.max_flow_or_pressure_range = v; }); }
   else p[key] = v;
 }
 function buildLimits(box) {
