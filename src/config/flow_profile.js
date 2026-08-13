@@ -29,6 +29,13 @@ export const DEFAULT_FLOW_PARAMS = {
 
 const num = (v, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
 
+// reaprime stores exit/limiter NESTED (exit:{type,condition,value},
+// limiter:{value,range}); the de1app-flat form only exists transiently in the
+// advanced editor. Read either so an API profile (nested) parses; buildFlowSteps
+// emits the nested form.
+const exitPressOver = (s) => (s.exit && s.exit.type === 'pressure' && s.exit.condition === 'over') ? num(s.exit.value) : num(s.exit_pressure_over);
+const stepLimit = (s) => (s.limiter && num(s.limiter.value) > 0) ? num(s.limiter.value) : num(s.max_flow_or_pressure);
+
 // steps[] -> simple params. Flow profiles are all flow-pump; roles are told apart
 // by name ("preinfusion", "hold", "decline") with transition as a fallback.
 export function parseFlow(profile) {
@@ -43,14 +50,14 @@ export function parseFlow(profile) {
   if (pre.length) {
     p.time = Math.round(pre.reduce((a, s) => a + num(s.seconds), 0));
     p.flow = Math.max(...pre.map((s) => num(s.flow, DEFAULT_FLOW_PARAMS.flow)));
-    const stop = Math.max(...pre.map((s) => num(s.exit_pressure_over)));
+    const stop = Math.max(...pre.map(exitPressOver));
     if (stop > 0) p.stopPressure = stop;
   } else { p.time = 0; }
 
   if (holdStep) {
     p.holdTime = Math.round(num(holdStep.seconds));
     p.flowHold = num(holdStep.flow, DEFAULT_FLOW_PARAMS.flowHold);
-    p.maxPressure = num(holdStep.max_flow_or_pressure) || 0;
+    p.maxPressure = stepLimit(holdStep) || 0;
   }
   if (declineStep && declineStep !== holdStep) {
     p.declineTime = Math.round(num(declineStep.seconds));
@@ -75,23 +82,23 @@ export function buildFlowSteps(pp) {
   const T = num(pp.temp, 88);
   const t1 = on ? num(pp.temp1, T) : T, t2 = on ? num(pp.temp2, T) : T, t3 = on ? num(pp.temp3, T) : T;
   const steps = [];
-  const mp = num(pp.maxPressure) > 0 ? { max_flow_or_pressure: num(pp.maxPressure), max_flow_or_pressure_range: 0.6 } : null;
+  // reaprime nested limiter (a flow step limited by max pressure); null = off.
+  const mp = num(pp.maxPressure) > 0 ? { value: num(pp.maxPressure), range: 0.6 } : null;
 
   if (num(pp.time) > 0) {
     steps.push({
       name: 'preinfusion', temperature: t1, sensor: 'coffee', pump: 'flow', transition: 'fast',
       pressure: 1, flow: num(pp.flow), seconds: num(pp.time), volume: 0, weight: 0,
-      exit_if: 1, exit_type: 'pressure_over', exit_pressure_over: num(pp.stopPressure),
-      exit_pressure_under: 0, exit_flow_over: 0, exit_flow_under: 0,
+      exit: { type: 'pressure', condition: 'over', value: num(pp.stopPressure) }, limiter: null,
     });
   }
   if (num(pp.holdTime) > 0) {
-    steps.push({ name: 'hold', temperature: t2, sensor: 'coffee', pump: 'flow', transition: 'fast', flow: num(pp.flowHold), seconds: num(pp.holdTime), volume: 0, weight: 0, exit_if: 0, exit_flow_over: 6, ...(mp || {}) });
+    steps.push({ name: 'hold', temperature: t2, sensor: 'coffee', pump: 'flow', transition: 'fast', flow: num(pp.flowHold), seconds: num(pp.holdTime), volume: 0, weight: 0, exit: null, limiter: mp });
   }
   if (num(pp.declineTime) > 0) {
-    steps.push({ name: 'decline', temperature: t3, sensor: 'coffee', pump: 'flow', transition: 'smooth', flow: num(pp.flowDecline), seconds: num(pp.declineTime), volume: 0, weight: 0, exit_if: 0, ...(mp || {}) });
+    steps.push({ name: 'decline', temperature: t3, sensor: 'coffee', pump: 'flow', transition: 'smooth', flow: num(pp.flowDecline), seconds: num(pp.declineTime), volume: 0, weight: 0, exit: null, limiter: mp });
   }
-  if (!steps.length) steps.push({ name: 'empty', temperature: T, sensor: 'coffee', pump: 'flow', transition: 'smooth', flow: 0, seconds: 0, volume: 0, weight: 0, exit_if: 0 });
+  if (!steps.length) steps.push({ name: 'empty', temperature: T, sensor: 'coffee', pump: 'flow', transition: 'smooth', flow: 0, seconds: 0, volume: 0, weight: 0, exit: null, limiter: null });
   return steps;
 }
 

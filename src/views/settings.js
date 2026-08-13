@@ -14,7 +14,7 @@ import { openGFC } from './gfc.js';
 import { openProfileEditor } from './profile_editor.js';
 import { openMaintenance } from './maintenance.js';
 import { renderProfileEditor, hideProfileEditor, removeProfileEditor, ppTempAdjust, ppToggleTempSteps, PRESSURE_SPEC, FLOW_SPEC } from './pressure_editor.js';
-import { renderAdvancedEditor, hideAdvancedEditor, removeAdvancedEditor } from './advanced_editor.js';
+import { renderAdvancedEditor, hideAdvancedEditor, removeAdvancedEditor, reaStepToFlat, advProfileToRea } from './advanced_editor.js';
 import { parsePressure } from '../config/pressure_profile.js';
 import { parseFlow } from '../config/flow_profile.js';
 import { setLang, currentLangName, currentLangCode, LANGUAGES, t } from '../modules/i18n.js';
@@ -348,9 +348,8 @@ async function loadMachine() {
   // Compare against GitHub's latest so the Firmware button can show "up to date".
   githubFwVersion().then((gh) => { live.githubFw = gh; if (host && curTab === 'machine') host.update(live); }).catch(() => {});
   live.coolMin = presence.sleepTimeoutMinutes ?? 30;
-  live.keepHot = presence.userPresenceEnabled === false;
   live._presence = presence;
-  loadSched();
+  loadSched(presence);   // sets live.keepHot + schedWake/schedSleep from the wake schedule
   renderKeepHotSched();
 }
 
@@ -369,10 +368,10 @@ function quickstartUrl() {
   return 'https://decentespresso.com/doc/' + (map[currentLangCode()] || 'quickstart') + '/';
 }
 
-// ---- Keep-hot daily schedule (Tcl scheduler): two time sliders that appear when
-// "Keep hot" is on. reaprime has no wake/sleep scheduler, so the times persist
-// client-side. Values are minutes-of-day (0..1439); Tcl uses seconds (step 60).
-const SCHED_KEY = 'insight_keephot_sched';
+// ---- Keep-hot daily schedule (Tcl scheduler_wake/scheduler_sleep): two time
+// sliders that appear when "Keep hot" is on. Backed by reaprime wake schedules
+// (/presence/schedules): the wake time -> schedule.time, the wake..sleep window ->
+// keepAwakeFor. Values are minutes-of-day (0..1439); Tcl uses seconds (step 60).
 // 12-hour clock: an explicit Misc "AM/PM" choice wins; otherwise fall back to the OS locale.
 const is12h = () => {
   const o = localStorage.getItem('insight_ampm');
@@ -385,11 +384,37 @@ const fmtHM = (min) => {
   if (is12h()) { const mer = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return `${h}:${mm} ${mer}`; }
   return `${String(h).padStart(2, '0')}:${mm}`;
 };
-function loadSched() {
-  try { const s = JSON.parse(localStorage.getItem(SCHED_KEY) || '{}'); live.schedWake = s.wake ?? 360; live.schedSleep = s.sleep ?? 1320; }
-  catch (e) { live.schedWake = 360; live.schedSleep = 1320; }
+const minToHM = (min) => { const m = Math.max(0, Math.min(1439, Math.round(min))); return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+const hmToMin = (s) => { const [h, m] = String(s || '0:0').split(':').map(Number); return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0); };
+// keep-awake window (minutes) from wake -> sleep, wrapping past midnight, clamped
+// to the API's 1..720 (a window over 12h can't be represented, so it caps at 12h).
+const schedWindow = () => { let w = Math.round(live.schedSleep - live.schedWake); if (w <= 0) w += 1440; return Math.max(1, Math.min(720, w)); };
+// Load the keep-hot schedule from reaprime presence settings (schedules[]). This
+// skin manages a single wake schedule; track its id so we can update/enable it.
+function loadSched(presence) {
+  const s = ((presence && presence.schedules) || [])[0];
+  if (s) {
+    live._schedId = s.id;
+    live.schedWake = hmToMin(s.time);
+    live.schedSleep = (live.schedWake + (Number(s.keepAwakeFor) || 0)) % 1440;
+    live.keepHot = s.enabled !== false;
+  } else {
+    live._schedId = null;
+    live.schedWake = 360; live.schedSleep = 1320;   // 06:00 .. 22:00 defaults
+    live.keepHot = false;
+  }
 }
-function saveSched() { try { localStorage.setItem(SCHED_KEY, JSON.stringify({ wake: live.schedWake, sleep: live.schedSleep })); } catch (e) { /* */ } }
+// Upsert the keep-hot wake schedule (debounced during slider drags): create it on
+// first use (capturing the server id), else patch time+window in place.
+let schedSaveT = null;
+function saveSched() {
+  clearTimeout(schedSaveT);
+  schedSaveT = setTimeout(() => {
+    const body = { time: minToHM(live.schedWake), daysOfWeek: [], enabled: !!live.keepHot, keepAwakeFor: schedWindow() };
+    if (live._schedId) api.updateSchedule(live._schedId, body).catch((e) => logger.warn('sched save', e));
+    else api.addSchedule(body).then((s) => { if (s && s.id) live._schedId = s.id; }).catch((e) => logger.warn('sched add', e));
+  }, 300);
+}
 let schedEls = null;
 function renderKeepHotSched() {
   if (!host) return;
@@ -595,7 +620,9 @@ async function loadAdvanced() {
   // Pressure/Flow profiles get the parametric editor: derive simple params from steps.
   if (live.profType === 'Pressure') live._pp = parsePressure(wf?.profile || { steps: [] });
   else if (live.profType === 'Flow') live._pp = parseFlow(wf?.profile || { steps: [] });
-  else { live._advSel = 0; removeAdvancedEditor(host); }   // Advanced: rebuild the editor for this profile
+  // Advanced: translate reaprime nested exit/limiter -> the editor's flat fields,
+  // then rebuild the editor for this profile.
+  else { live._advSel = 0; (live._advProfile.steps || []).forEach(reaStepToFlat); removeAdvancedEditor(host); }
   setTabProfile(wf?.profile);
   live.profSteps = steps.map((s, i) => `${i + 1}. ${s.name || s.pump}  —  ${s.pump === 'flow' ? s.flow + ' mL/s' : s.pressure + ' bar'} · ${s.seconds}s · ${s.temperature}°C`).join('\n');
 }
@@ -605,7 +632,7 @@ async function loadAdvanced() {
 // seconds slider; dragging live-updates the workflow. Advanced (2c) profiles keep
 // the whole-card tap-to-open-editor instead (they are too varied for fixed rows).
 let advSaveT = null;
-function saveAdv() { clearTimeout(advSaveT); advSaveT = setTimeout(() => api.updateWorkflow({ profile: live._advProfile }).catch((e) => logger.warn('adv save', e)), 300); }
+function saveAdv() { clearTimeout(advSaveT); advSaveT = setTimeout(() => api.updateWorkflow({ profile: advProfileToRea(live._advProfile) }).catch((e) => logger.warn('adv save', e)), 300); }
 function advSlidersVisible() { return curTab === 'advanced' && P2SLIDE.includes(live.advPage); }
 function renderAdvSliders() {
   if (!host) return;
@@ -1317,14 +1344,18 @@ const actions = {
   // the espresso page to reload it, so what you edited is what you see.
   ok: async () => {
     clearTimeout(advSaveT);
-    if (curTab === 'advanced' && live._advProfile) { try { await api.updateWorkflow({ profile: live._advProfile }); } catch (e) { logger.warn('ok save', e); } }
+    if (curTab === 'advanced' && live._advProfile) { try { await api.updateWorkflow({ profile: advProfileToRea(live._advProfile) }); } catch (e) { logger.warn('ok save', e); } }
     cleanup(); closeOverlay(); opened = false;
     if (hooks.onClose) hooks.onClose();
     window.dispatchEvent(new Event('insight-workflow-changed'));
   },
   // MACHINE
   editCool: () => num('Cool down after (min)', 'coolMin', 5, 240, 5, (v) => api.setPresence({ ...(live._presence || {}), sleepTimeoutMinutes: v }).catch((e) => logger.warn('presence', e))),
-  toggleKeepHot: () => { live.keepHot = !live.keepHot; host.update(live); renderKeepHotSched(); api.setPresence({ ...(live._presence || {}), userPresenceEnabled: !live.keepHot }).catch((e) => logger.warn('presence', e)); },
+  toggleKeepHot: () => {
+    live.keepHot = !live.keepHot; host.update(live); renderKeepHotSched();
+    if (live._schedId) api.updateSchedule(live._schedId, { enabled: live.keepHot }).catch((e) => logger.warn('sched enable', e));
+    else if (live.keepHot) saveSched();   // first enable creates the schedule
+  },
   readManual: () => window.open(manualUrl(), '_blank'),
   clean: () => { machineActionUrl('clean'); if (confirm('Run cleaning cycle?')) openMaintenance('clean', clearMachineActionUrl); else clearMachineActionUrl(); },
   descale: () => { machineActionUrl('descale'); openMaintenance('descale', clearMachineActionUrl); },

@@ -39,6 +39,12 @@ export const getShotIds = () => j('GET', '/shots/ids');
 export const getPlugins = () => j('GET', '/plugins');
 export const getPresence = () => j('GET', '/presence/settings');
 export const setPresence = (s) => j('POST', '/presence/settings', s);
+// Wake schedules (the keep-hot daily schedule). WakeSchedule = {id, time:"HH:MM",
+// daysOfWeek:[1..7] ([]=every day), enabled, keepAwakeFor:minutes|null}.
+export const getSchedules = () => j('GET', '/presence/schedules');
+export const addSchedule = (s) => j('POST', '/presence/schedules', s);
+export const updateSchedule = (id, s) => j('PUT', `/presence/schedules/${encodeURIComponent(id)}`, s);
+export const deleteSchedule = (id) => fetch(`${API_BASE}/presence/schedules/${encodeURIComponent(id)}`, { method: 'DELETE' });
 export const getProfiles = (opts = '') => j('GET', `/profiles${opts}`);
 export const getLatestShot = () => j('GET', '/shots/latest');
 export const updateShot = (id, data) => j('PUT', `/shots/${encodeURIComponent(id)}`, data);

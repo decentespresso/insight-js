@@ -73,18 +73,17 @@ const actions = {
   stopMaint: () => { api.setMachineState('idle').catch(() => {}); close(); },
   // ---- travel / transport ----
   travelCancel: () => {
-    // API: de1_send_shot_frames() — cancel the "cool" step queued when Transport
-    // opened, restoring the normal profile. No reaprime endpoint yet; call here.
+    // Backed out before the purge started — nothing running to stop.
     close();
   },
   travelPurge: () => {
-    // API: start_air_purge() — begin pumping the water out of the machine so it
-    // can be moved without leaking. reaprime exposes no air-purge command yet.
+    // Start the air purge (Tcl start_air_purge): pump the water out so the machine
+    // can be moved without leaking. reaprime state `airPurge`; travelWake/idle stops it.
+    api.setMachineState('airPurge').catch((e) => logger.warn('airPurge', e));
     host.show('travel_do');
   },
   travelWake: () => {
-    api.setMachineState('idle').catch(() => {});   // wake the machine (Tcl start_idle)
-    // API: de1_send_waterlevel_settings() — restore normal water-level behavior.
+    api.setMachineState('idle').catch(() => {});   // stop the purge / wake (Tcl start_idle)
     close();
   },
 };
@@ -101,8 +100,9 @@ export function openMaintenance(kind, done) {
   host = new PageHost(layer, config, actions, layer.querySelector('.s2page'));
   if (kind === 'clean') { host.show('cleaning'); api.setMachineState('cleaning').catch((e) => logger.warn('clean', e)); }
   else if (kind === 'transport') {
-    // API: de1_send_shot_frames("cool") — queue a cooling step before the purge.
-    // reaprime exposes no shot-frame endpoint yet; call it here when available.
+    // de1app cools the machine (de1_send_shot_frames "cool") before purging;
+    // reaprime has no cooldown state, so we go straight to the prep page — the
+    // machine cools passively — then the purge runs on Ok (travelPurge -> airPurge).
     host.show('travel_prepare');
   } else host.show('descale_prepare');
 }

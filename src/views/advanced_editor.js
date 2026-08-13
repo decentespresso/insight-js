@@ -30,6 +30,64 @@ const round1 = (v) => Math.round(v * 10) / 10;
 // A blank step (used by "add").
 const NEW_STEP = () => ({ name: 'new step', temperature: 90, sensor: 'coffee', pump: 'flow', transition: 'fast', pressure: 6, flow: 2, seconds: 10, volume: 0, weight: 0, exit_if: 0, exit_type: 'pressure_over', exit_pressure_over: 11, exit_pressure_under: 0, exit_flow_over: 6, exit_flow_under: 0, max_flow_or_pressure: 0, popup: '' });
 
+// ---- reaprime <-> de1app-flat step conversion --------------------------------
+// This editor works in de1app's flat `advanced_shot` field names (exit_if /
+// exit_type / exit_pressure_over / max_flow_or_pressure …). reaprime profiles
+// instead carry a nested `exit:{type,condition,value}` and `limiter:{value,range}`.
+// Without translation the editor never shows an existing exit/limit and any edit
+// to "Move on if…" / "Limit flow|pressure" is written to fields reaprime ignores
+// (silent no-op). settings.js calls reaStepToFlat when loading an advanced
+// profile and advProfileToRea before every save. Both are idempotent so a step
+// that is already in one representation is left alone.
+const EXIT_FLAT = { pressure_over: 'exit_pressure_over', pressure_under: 'exit_pressure_under', flow_over: 'exit_flow_over', flow_under: 'exit_flow_under' };
+// reaprime nested step -> flat fields the editor reads (mutates in place).
+export function reaStepToFlat(s) {
+  const e = s.exit;
+  if (e && (e.type === 'pressure' || e.type === 'flow') && (e.condition === 'over' || e.condition === 'under')) {
+    s.exit_if = 1;
+    s.exit_type = `${e.type}_${e.condition}`;
+    s[EXIT_FLAT[s.exit_type]] = Number(e.value) || 0;
+  } else if (!('exit_if' in s)) {
+    s.exit_if = 0;
+  }
+  const lim = s.limiter;
+  if (lim && Number(lim.value) > 0) {
+    s.max_flow_or_pressure = Number(lim.value);
+    s.max_flow_or_pressure_range = Number(lim.range) || 0;
+  } else if (!('max_flow_or_pressure' in s)) {
+    s.max_flow_or_pressure = 0;
+  }
+  return s;
+}
+// flat fields -> reaprime nested step, stripping the flat keys (mutates in place).
+export function flatStepToRea(s) {
+  if ('exit_if' in s) {
+    const [type, cond] = (s.exit_type || '').split('_');
+    s.exit = (s.exit_if && (type === 'pressure' || type === 'flow') && (cond === 'over' || cond === 'under'))
+      ? { type, condition: cond, value: Number(s[EXIT_FLAT[s.exit_type]]) || 0 }
+      : null;
+    delete s.exit_if; delete s.exit_type;
+    delete s.exit_pressure_over; delete s.exit_pressure_under;
+    delete s.exit_flow_over; delete s.exit_flow_under;
+  }
+  if ('max_flow_or_pressure' in s) {
+    s.limiter = Number(s.max_flow_or_pressure) > 0
+      ? { value: Number(s.max_flow_or_pressure), range: Number(s.max_flow_or_pressure_range) || 0 }
+      : null;
+    delete s.max_flow_or_pressure; delete s.max_flow_or_pressure_range;
+  }
+  return s;
+}
+// Deep-clone a profile and convert its steps flat -> reaprime for sending to the
+// API, leaving the editor's working copy (with flat fields) untouched. Steps that
+// carry no flat fields (e.g. from the parametric pressure/flow editor) pass through
+// unchanged. Pure-JSON clone (structuredClone is absent on the tablet webview).
+export function advProfileToRea(profile) {
+  const p = JSON.parse(JSON.stringify(profile || { steps: [] }));
+  (p.steps || []).forEach(flatStepToRea);
+  return p;
+}
+
 // ---- card titles (grey) ----
 const TITLES = [
   { x: 984, y: 240, t: () => '1: Temperature' },
