@@ -256,6 +256,9 @@ const actions = {
   tempZoomIn: () => { tempLevel = Math.min(TEMP_RANGES.length - 1, tempLevel + 1); applyTempRange(); },
   tempZoomOut: () => { if (tempLevel === 0) return actions.unzoom(); tempLevel -= 1; applyTempRange(); },
   adjust: (el) => {
+    // Temps step in whole °C even in Fahrenheit mode: the DE1's temp fields are
+    // integer °C (a 78.9 send stores 78), so a 1°F step would be false precision
+    // that doesn't persist. The value still DISPLAYS in °F (via fmtTemp).
     const a = el.adj; let v = (live[a.key] ?? a.min) + a.delta;
     v = Math.min(a.max, Math.max(a.min, v)); live[a.key] = v; host.update(live);
     clearTimeout(saveT); saveT = setTimeout(() => api.updateWorkflow(a.set(v)).catch((e) => logger.warn('save', e)), 300);

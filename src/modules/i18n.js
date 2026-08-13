@@ -63,6 +63,8 @@ export const tempIsF = () => localStorage.getItem('units') === 'f';
 export const tempSym = () => (tempIsF() ? '°F' : '°C');
 // Celsius -> user's unit (number only).
 export const cToUnit = (c) => (tempIsF() ? (+c * 9) / 5 + 32 : +c);
+// user's unit -> Celsius (for temp inputs; steppers/numpad edit in the display unit).
+export const unitToC = (v) => (tempIsF() ? ((+v - 32) * 5) / 9 : +v);
 // Format a Celsius value for display in the user's unit, with the ° suffix.
 export function fmtTemp(c, dec = 1) {
   if (c == null || !Number.isFinite(+c)) return '';
