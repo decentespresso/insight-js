@@ -1093,10 +1093,12 @@ function renderCalPage() {
     txt(1350, 810, t('Heater test flow rate'), { size: 34, weight: 700 });
     const p2 = d.adv.heaterPh2Flow ?? 4; const p2v = txt(1970, 878, `${p2.toFixed(1)} mL/s`, { size: 34 });
     slider(1350, 852, 600, 0.5, 8, p2, (v) => { v = Math.round(v / 0.1) * 0.1; p2v.textContent = `${v.toFixed(1)} mL/s`; saveAdv('heaterPh2Flow', v); });
-    // Stop at weight offset (no gateway field -> local)
-    txt(1350, 1000, t('Stop at weight offset'), { size: 34, weight: 700 });
-    let swo = parseFloat(g('cal_stop_weight_offset', '0.15')); const swov = txt(1970, 1068, `${swo.toFixed(2)} ${t('seconds')}`, { size: 34 });
-    slider(1350, 1042, 600, 0, 2, swo, (v) => { v = Math.round(v / 0.01) * 0.01; swo = v; swov.textContent = `${v.toFixed(2)} ${t('seconds')}`; localStorage.setItem('cal_stop_weight_offset', v); });
+    // Volume Flow Multiplier (/settings volumeFlowMultiplier, seconds) — decaid's
+    // stop-by-volume lag compensation (default 0.3s). Pairs with the page-1 Weight
+    // Flow Multiplier; replaces the old localStorage-only "Stop at weight offset".
+    txt(1350, 1000, t('Volume Flow Multiplier'), { size: 34, weight: 700 });
+    const vm0 = d.rea.volumeFlowMultiplier ?? 0.3; const vmv = txt(1970, 1068, `${vm0.toFixed(2)} ${t('seconds')}`, { size: 34 });
+    slider(1350, 1042, 600, 0, 2, vm0, (v) => { v = Math.round(v / 0.01) * 0.01; vmv.textContent = `${v.toFixed(2)} ${t('seconds')}`; saveRea('volumeFlowMultiplier', v); });
     // Defaults for cafe
     link(350, 1075, `[ ${t('Defaults for cafe')} ]`, () => { saveAdv('heaterIdleTemp', 99); saveAdv('heaterPh2Timeout', 1); saveAdv('heaterPh1Flow', 2); saveAdv('heaterPh2Flow', 4); renderCalPage(); });
   } else {
@@ -1110,9 +1112,9 @@ function renderCalPage() {
     txt(350, 910, t('Flush timeout'), { size: 34, weight: 700 });
     const fto = d.ms.flushTimeout ?? 5; const ftov = txt(970, 978, `${Math.round(fto)} ${t('seconds')}`, { size: 34 });
     slider(350, 952, 600, 3, 120, fto, (v) => { v = Math.round(v); ftov.textContent = `${v} ${t('seconds')}`; saveMs('flushTimeout', v); });
-    toggleRow(1350, 566, 1500, 564, 'Two tap steam stop', g('cal_two_tap', '0') === '1', (v) => localStorage.setItem('cal_two_tap', v ? '1' : '0'));
-    toggleRow(1350, 666, 1500, 664, 'Slow start', g('cal_slow_start', '0') === '1', (v) => localStorage.setItem('cal_slow_start', v ? '1' : '0'));
-    toggleRow(1350, 766, 1500, 764, 'Eco steam', g('cal_eco_steam', '0') === '1', (v) => localStorage.setItem('cal_eco_steam', v ? '1' : '0'));
+    // Steam purge mode (/machine/settings steamPurgeMode: 0=Normal, 1=Two Tap Stop),
+    // matching decaid/Streamline. Slow-start and Eco-steam removed — not real settings.
+    toggleRow(1350, 566, 1500, 564, 'Two tap steam stop', d.ms.steamPurgeMode === 1, (v) => saveMs('steamPurgeMode', v ? 1 : 0));
     // Refill kit override (/machine/settings/advanced refillKitSetting: auto=2, off=0, on=1)
     txt(1350, 960, t('Refill kit: unable to detect'), { size: 30, weight: 700 });
     const rk = d.adv.refillKitSetting;
