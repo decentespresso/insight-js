@@ -613,8 +613,18 @@ async function loadPresets() {
     .filter((r) => r.vis !== 'deleted').sort((a, b) => (a.p.title || '').localeCompare(b.p.title || ''));
   live._allPresets = all;                                   // all (for the eyeball visibility mode)
   live._presets = all.filter((r) => r.vis === 'visible');   // only visible (normal list)
-  const cur = live._presets.find((i) => i.p.title === wf?.profile?.title) || live._presets[0];
-  selectPreset(cur);
+  const match = live._presets.find((i) => i.p.title === wf?.profile?.title);
+  if (match) {
+    selectPreset(match);
+  } else if (wf?.profile?.steps?.length) {
+    // The workflow holds an unsaved profile — e.g. one just built via "+ New" or an
+    // edit that hasn't been saved to /profiles yet. Represent it as a virtual
+    // selection so its steps stay put and the piggy can save it; crucially do NOT
+    // load a stored preset over it (that would silently discard the user's work).
+    selectPreset({ id: null, vis: 'visible', isDefault: false, p: structuredClone(wf.profile), _unsaved: true });
+  } else {
+    selectPreset(live._presets[0]);
+  }
   renderPresetList();
 }
 async function loadAdvanced() {
@@ -744,7 +754,10 @@ function selectPreset(it) {
   live.presetDesc = it ? (it.p.notes || '(no description)') : '';
   live._selSteps = it ? structuredClone(it.p.steps || []) : [];      // working copy the temp buttons edit
   live.previewTemp = live._selSteps[0]?.temperature ?? 92;
-  if (it) { setTabProfile(it.p); loadSelectedToWorkflow(); }
+  // An _unsaved virtual selection already IS the workflow — re-loading it would be
+  // a no-op at best and clobber freshly-built steps at worst, so only load stored
+  // presets into the workflow.
+  if (it) { setTabProfile(it.p); if (!it._unsaved) loadSelectedToWorkflow(); }
   host && host.update(live);
   const inp = host && host.page.querySelector('.s2-name-input'); if (inp) inp.value = live.presetName;
   renderPreview();
@@ -1303,8 +1316,18 @@ const actions = {
     const sel = live._sel;
     if (!sel || !name) { toast('Type a name first'); return; }
     const steps = live._selSteps || sel.p.steps || [];
-    const edited = JSON.stringify(steps) !== JSON.stringify(sel.p.steps || []);
     try {
+      if (sel._unsaved || !sel.id) {
+        // Brand-new profile built in the editor ("+ New" or an unsaved edit): POST it
+        // under the chosen name, then adopt that title into the workflow so the list
+        // re-selects the saved row instead of treating it as unsaved again.
+        await api.saveProfile({ ...sel.p, title: name, steps });
+        await api.updateWorkflow({ profile: { ...sel.p, title: name, steps } }).catch(() => {});
+        toast(`Saved "${name}"`);
+        await loadPresets();
+        return;
+      }
+      const edited = JSON.stringify(steps) !== JSON.stringify(sel.p.steps || []);
       if (edited) {
         // Content changed (e.g. temperature): POST a new profile (reaprime content-
         // hashes, so distinct content => distinct id). If we branched off a default,
