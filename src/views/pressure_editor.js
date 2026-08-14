@@ -181,6 +181,13 @@ function attachDrag(sl, sspec, live, onChange) {
 function regen(live) {
   if (!live._advProfile) live._advProfile = { steps: [] };
   live._advProfile.steps = spec.build(live._pp);
+  // "4: stop at weight" is the profile-level target weight (de1app
+  // final_desired_shot_weight). parseFlow/parsePressure READ it into pp.weight on
+  // load, so write it back on save — otherwise editing the stop weight silently
+  // never persists. Mirror to target_volume too (these editors expose no separate
+  // volumetric stop; de1app keeps the two in step for scale-less machines).
+  const w = Number(live._pp.weight);
+  if (Number.isFinite(w)) { live._advProfile.target_weight = w; live._advProfile.target_volume = w; }
 }
 
 function refresh(live) {
