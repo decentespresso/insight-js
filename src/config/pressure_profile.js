@@ -105,7 +105,9 @@ export function buildPressureSteps(pp) {
   const t2 = on ? num(pp.temp2, T) : T, t3 = on ? num(pp.temp3, T) : T;
   const steps = [];
   // reaprime nested limiter (a pressure step limited by max flow); null = off.
-  const mf = num(pp.maxFlow) > 0 ? { value: num(pp.maxFlow), range: 0.6 } : null;
+  // range = de1app maximum_flow_range_default (1.0) — pressure_to_advanced_list
+  // stamps this on the rise-and-hold/decline frames, so match it for byte-fidelity.
+  const mf = num(pp.maxFlow) > 0 ? { value: num(pp.maxFlow), range: 1.0 } : null;
 
   // preinfusion: a single flow frame at the preinfusion temperature.
   const time = num(pp.time);

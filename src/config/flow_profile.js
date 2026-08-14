@@ -83,7 +83,9 @@ export function buildFlowSteps(pp) {
   const t1 = on ? num(pp.temp1, T) : T, t2 = on ? num(pp.temp2, T) : T, t3 = on ? num(pp.temp3, T) : T;
   const steps = [];
   // reaprime nested limiter (a flow step limited by max pressure); null = off.
-  const mp = num(pp.maxPressure) > 0 ? { value: num(pp.maxPressure), range: 0.6 } : null;
+  // range = de1app maximum_pressure_range_default (0.9) — flow_to_advanced_list
+  // stamps this on the hold/decline frames, so match it for byte-fidelity.
+  const mp = num(pp.maxPressure) > 0 ? { value: num(pp.maxPressure), range: 0.9 } : null;
 
   if (num(pp.time) > 0) {
     steps.push({
