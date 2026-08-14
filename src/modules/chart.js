@@ -1,7 +1,8 @@
 // Insight charts, rendered from a shared data buffer so any view (normal 3-panel
 // or a zoomed single panel) draws the full shot history. Buffer shape:
 //   { t:[], p:[], pg:[], f:[], fg:[], w:[], T:[], Tg:[] }
-// (time, pressure, pressure-goal, flow, flow-goal, weight, temp, temp-goal).
+// (time, pressure, pressure-goal, flow, flow-goal, weight-FLOW (g/s, not
+// cumulative weight — shares the flow panel's 0-8 axis), temp, temp-goal).
 // Each panel has its own x-axis, coloured to match the panel, exactly like the
 // Tcl Insight skin. Lines are angular (linear), not splined.
 import { logger } from './logger.js';

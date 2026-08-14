@@ -97,7 +97,7 @@ const STEAM_DESIRED_KEY = 'insight_steam_desired_temp';
 const steamDesiredTemp = () => { const v = parseFloat(localStorage.getItem(STEAM_DESIRED_KEY)); return v >= 135 ? v : 150; };
 
 let currentFamily = 'espresso', machineState = 'idle';
-let shotStart = null, curWeight = 0, saveT = null, activeChart = null;
+let shotStart = null, curWeight = 0, curWeightFlow = 0, saveT = null, activeChart = null;
 // temperature-zoom Y-scale levels (tap top half to zoom in, bottom to zoom out)
 const TEMP_RANGES = [[78, 92], [84, 92], [87, 91]];
 let tempLevel = 0;
@@ -337,7 +337,7 @@ function onSnapshot(d) {
       live.pourVolumeOnly += dv; live.pourElapsed = live.elapsed - preinfEnd;
     }
     buf.t.push(live.elapsed); buf.p.push(d.pressure); buf.pg.push(d.targetPressure);
-    buf.f.push(d.flow); buf.fg.push(d.targetFlow); buf.w.push(curWeight);
+    buf.f.push(d.flow); buf.fg.push(d.targetFlow); buf.w.push(curWeightFlow);
     buf.T.push(d.mixTemperature); buf.Tg.push(d.targetMixTemperature);
     // puck resistance = pressure / flow^2 (laminar), like Insight's resistance curve
     buf.r.push(d.flow > 0.2 ? +(d.pressure / (d.flow * d.flow)).toFixed(2) : null);
@@ -389,7 +389,10 @@ function onStateChange(prev, next) {
   }
 }
 
-function onScale(d) { if (typeof d.weight === 'number') { curWeight = d.weight; live.weight = d.weight; } }
+function onScale(d) {
+  if (typeof d.weight === 'number') { curWeight = d.weight; live.weight = d.weight; }
+  if (typeof d.weightFlow === 'number') curWeightFlow = d.weightFlow;
+}
 
 async function init() {
   if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark';  // restore saved theme

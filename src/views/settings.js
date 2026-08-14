@@ -616,11 +616,21 @@ async function loadPresets() {
   const match = live._presets.find((i) => i.p.title === wf?.profile?.title);
   if (match) {
     selectPreset(match);
+    // The workflow may hold edits (e.g. from the Advanced/Flow/Pressure editor) for
+    // this same-titled preset that were never saved as a preset. Swap the *working*
+    // copy (live._selSteps) for those live steps so they aren't silently dropped, but
+    // leave live._sel.p (the stored original) alone, since savePresetName diffs
+    // against it to decide new-profile vs pure-rename.
+    if (wf?.profile?.steps?.length) {
+      live._selSteps = structuredClone(wf.profile.steps);
+      live.previewTemp = live._selSteps[0]?.temperature ?? live.previewTemp;
+      host.update(live); renderPreview();
+    }
   } else if (wf?.profile?.steps?.length) {
-    // The workflow holds an unsaved profile — e.g. one just built via "+ New" or an
-    // edit that hasn't been saved to /profiles yet. Represent it as a virtual
-    // selection so its steps stay put and the piggy can save it; crucially do NOT
-    // load a stored preset over it (that would silently discard the user's work).
+    // The workflow holds an unsaved profile that matches no stored preset (e.g. one
+    // just built via '+ New'). Represent it as a virtual selection so its steps stay
+    // put and the piggy can save it; crucially do NOT load a stored preset over it
+    // (that would silently discard the user's work).
     selectPreset({ id: null, vis: 'visible', isDefault: false, p: structuredClone(wf.profile), _unsaved: true });
   } else {
     selectPreset(live._presets[0]);
@@ -1330,10 +1340,15 @@ const actions = {
       const edited = JSON.stringify(steps) !== JSON.stringify(sel.p.steps || []);
       if (edited) {
         // Content changed (e.g. temperature): POST a new profile (reaprime content-
-        // hashes, so distinct content => distinct id). If we branched off a default,
-        // hide that default — the Streamline "new profile replaces the default" flow.
+        // hashes, so distinct content => distinct id). Saving under the SAME title
+        // is an in-place overwrite, so retire the old id (hide if it's a default —
+        // those can't be deleted — else delete it) so edits don't pile up as
+        // same-named duplicates. A changed title is a deliberate fork: keep both.
         const created = await api.saveProfile({ ...sel.p, title: name, steps });
-        if (sel.isDefault && created && created.id && created.id !== sel.id) await api.setProfileVisibility(sel.id, 'hidden');
+        if (created && created.id && created.id !== sel.id && name === (sel.p.title || '').trim()) {
+          if (sel.isDefault) await api.setProfileVisibility(sel.id, 'hidden');
+          else await api.deleteProfile(sel.id).catch(() => {});
+        }
         toast(`Saved "${name}"`);
       } else if (!sel.isDefault) {
         await api.updateProfile(sel.id, { ...sel.p, title: name });   // pure rename of a user profile
