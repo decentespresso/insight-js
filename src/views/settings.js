@@ -239,7 +239,20 @@ function advType(steps) {
   const body = steps.filter((s) => !/preinf/i.test(s.name || ''));
   const pumps = new Set((body.length ? body : steps).map((s) => s.pump));
   if (pumps.size !== 1) return 'Advanced';
-  return pumps.has('flow') ? 'Flow' : 'Pressure';
+  const type = pumps.has('flow') ? 'Flow' : 'Pressure';
+  // Even a single-pump profile needs the Advanced step editor if the 3-stage
+  // parametric model (preinfuse → hold/rise → decline) can't represent it —
+  // otherwise editing would collapse and destroy its structure (e.g. Blooming
+  // Allongé's bloom + per-step temps + mid-shot exits).
+  return parametricFits(steps) ? type : 'Advanced';
+}
+// True only when the parametric editor can round-trip this profile. It can't
+// hold: a bloom/pause (a flow-0 step that isn't preinfusion), a mid-shot exit
+// (an exit on a non-preinfusion step — parseFlow/parsePressure only key off a
+// "preinfusion"-named step), or more per-step temperatures than its model tracks.
+function parametricFits(steps) {
+  if (new Set(steps.map((s) => +s.temperature || 0)).size > 4) return false;
+  return !steps.some((s) => !/preinf/i.test(s.name || '') && ((s.pump === 'flow' && +s.flow === 0) || s.exit));
 }
 const ADV_PAGE = { Pressure: 'settings_2a', Flow: 'settings_2b', Advanced: 'settings_2c' };
 
