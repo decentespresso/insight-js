@@ -71,6 +71,31 @@ export function fmtTemp(c, dec = 1) {
   return `${cToUnit(c).toFixed(dec)}${tempSym()}`;
 }
 
+// Machine substate → short, human-readable, translatable text. The gateway sends
+// the raw Decaid MachineSubstate enum name (e.g. "preparingForShot"), which is not
+// user-facing. Map the known ones; fall back to de-camelCasing unknown/new values
+// so nothing ever shows as a raw identifier.
+const SUBSTATE_TEXT = {
+  idle: '',                       // machine idle → the caller's own "ready" label
+  preparingForShot: 'heating',    // heating/stabilising before the pour
+  preinfusion: 'preinfusion',
+  pouring: 'pouring',
+  pouringDone: 'done',
+  cleaningStart: 'cleaning',
+  cleaningGroup: 'cleaning',
+  cleanSoaking: 'soaking',
+  cleaningSteam: 'cleaning',
+  needsWater: 'add water',
+};
+export function readableSubstate(s) {
+  if (!s) return '';
+  if (Object.prototype.hasOwnProperty.call(SUBSTATE_TEXT, s)) return SUBSTATE_TEXT[s] ? t(SUBSTATE_TEXT[s]) : '';
+  if (/^error/i.test(s)) return t('error');
+  // Unknown/new enum value: "someNewState" → "some new state" (then translate).
+  const words = s.replace(/([A-Z])/g, ' $1').replace(/\s+/g, ' ').trim().toLowerCase();
+  return t(words);
+}
+
 export function setLang(nameOrCode) {
   const code = NAME_TO_CODE[nameOrCode] || (supportedLanguages.includes(nameOrCode) ? nameOrCode : 'en');
   currentLanguage = code;

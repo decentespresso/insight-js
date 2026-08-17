@@ -48,8 +48,9 @@ export const waterConfig = {
     // ---- flow-rate row + live running weight ----
     row(['water_1'], 1096, 1318, 'nw', C.slabel, () => t('Flow rate max'), { size: F.set }),
     row(['water_1'], 1690, 1318, 'ne', C.sval, (l) => `${n1(l.waterFlowMax)} mL/s`, { size: F.set }),
-    // full-width flow-rate slider at the bottom (left of the power button)
-    { kind: 'slider', pages: ['water_1'], rect: [10, 1436, 2000, 1586], handleW: 500, trough: '#d5d9e8', fill: '#f7f5ff',
+    // full-width flow-rate slider at the bottom (left of the power button). Shown on
+    // the running page too so hot-water flow can be adjusted live while pouring.
+    { kind: 'slider', pages: ['water_1', 'water'], rect: [10, 1436, 2000, 1586], handleW: 500, trough: '#d5d9e8', fill: '#f7f5ff',
       adj: { key: 'waterFlowMax', min: 1, max: 10, step: 1, set: (v) => ({ hotWaterData: { flow: v } }) },
       valueBind: (l) => l.waterFlowMax, action: 'slideFlow' },
     row(['water'], 1394, 1010, 'center', C.title, (l) => `${n0(l.weight)} g`, { size: 44 }),

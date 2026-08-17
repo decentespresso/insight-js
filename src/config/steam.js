@@ -57,8 +57,9 @@ export const steamConfig = {
     // ---- live mini temperature graph (left card area) on the running page ----
     { kind: 'graph', id: 'steam_mini', pages: ['steam'], rect: [110, 470, 940, 1180] },
 
-    // full-width flow-rate slider at the bottom (left of the power button)
-    { kind: 'slider', pages: ['steam_1'], rect: [10, 1436, 2000, 1586], handleW: 500, trough: '#d5d9e8', fill: '#f7f5ff',
+    // full-width flow-rate slider at the bottom (left of the power button). Shown on
+    // the running page too so steam flow can be adjusted live while steaming.
+    { kind: 'slider', pages: ['steam_1', 'steam'], rect: [10, 1436, 2000, 1586], handleW: 500, trough: '#d5d9e8', fill: '#f7f5ff',
       adj: { key: 'steamFlowMax', min: 0.4, max: 2.5, step: 0.1, set: (v) => ({ steamSettings: { flow: v } }) },
       valueBind: (l) => l.steamFlowMax, action: 'slideFlow' },
   ],

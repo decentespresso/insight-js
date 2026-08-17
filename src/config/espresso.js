@@ -2,7 +2,7 @@
 // Consumed by PageHost. Elements: tap-zone buttons, live-text variables (bound
 // to the `live` object), and the graph mount. Backgrounds & coordinates come
 // straight from the extracted INSIGHT coordinate map.
-import { t, fmtTemp } from '../modules/i18n.js';
+import { t, fmtTemp, readableSubstate } from '../modules/i18n.js';
 const IMG = 'assets/insight/';
 const F = { data: 44, label: 34, button: 80, sub: 42, prof: 40, step: 30 };
 const C = { data: '#42465c', lighter: '#969eb1', dark: '#5a5d75', button: '#2d3046' };
@@ -77,7 +77,7 @@ export const espressoConfig = {
     row(['espresso'], 2290, 390, 'center', C.button, () => t('STOP'), { size: F.button, weight: 'bold' }),
     row(['espresso_3'], 2290, 390, 'center', C.button, () => t('RESTART'), { size: F.button, weight: 'bold' }),
     row(CARDALL, 2295, 462, 'center', C.lighter, () => t('Espresso').toUpperCase(), { size: F.sub }),
-    row(CARDALL, 2295, 520, 'center', C.lighter, (l) => l.substate || t('ready'), { size: F.sub }),
+    row(CARDALL, 2295, 520, 'center', C.lighter, (l) => readableSubstate(l.substate) || t('ready'), { size: F.sub }),
 
     // ---- data card: Time / Volume columns (shared, pos_top 720, spacer 38) ----
     row(CARDALL, 2060, cy(0), 'nw', C.dark, () => t('Time'), { weight: 'bold' }),

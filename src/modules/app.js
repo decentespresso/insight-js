@@ -382,8 +382,12 @@ function onStateChange(prev, next) {
     if (next === 'steam' || next === 'hotWater') { runStart = performance.now(); resetRunBuf(); }
     showPage(families[runFam].run);
   } else if (prevFam && (next === 'idle' || next === 'ready')) {
-    if (prevFam === 'espresso') startDoneTimer();
-    showPage(families[prevFam].done);
+    // Espresso ends on a shot-summary "done" page. Steam / water / flush have no
+    // meaningful done page (theirs is a bare RESTART-only screen with no controls),
+    // so they return to their editable base page — the settings + START and the
+    // live flow slider — which is what should show after the operation completes.
+    if (prevFam === 'espresso') { startDoneTimer(); showPage(families.espresso.done); }
+    else showPage(families[prevFam].base);
   } else if (next === 'idle') {
     showPage(families[currentFamily].base);
   }
