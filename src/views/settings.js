@@ -144,14 +144,14 @@ const appEls = [
   B(P4, [1910, 306, 2530, 510], 'langPicker'),
   B(P4, [1290, 520, 1900, 720], 'misc'),
   B(P4, [1910, 520, 2530, 720], 'extPicker'),
-  // Advanced card (title 1310,820; "More Settings" button spans the whole box) —
-  // opens Decaid's own settings (which carry newer options this older UI lacks).
-  V(P4, 1310, 820, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Advanced') }),
-  V(P4, 1900, 980, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('More Settings') }),
-  B(P4, [1290, 860, 2550, 1100], 'moreSettings'),
-  // Exit app card (title 1310,1130; Exit button spans the whole box)
+  // Documentation card (title 1310,820; Quickstart button spans the whole box)
+  V(P4, 1310, 820, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Documentation') }),
+  V(P4, 1900, 980, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('Quickstart guide') }),
+  B(P4, [1290, 860, 2550, 1100], 'docs'),
+  // Exit card (title 1310,1130; button spans the whole box) — "Exit to Decaid"
+  // returns to the Decent dashboard via the host bridge.
   V(P4, 1310, 1130, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Exit app') }),
-  V(P4, 1900, 1290, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('Exit') }),
+  V(P4, 1900, 1290, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('Exit to Decaid') }),
   B(P4, [1290, 1170, 2550, 1400], 'exitApp'),
 ];
 
@@ -374,7 +374,7 @@ function manualUrl() {
   };
   return 'https://decentespresso.com/doc/' + (map[currentLangCode()] || 'quickstart/quickstart.html#pf21');
 }
-// Documentation "Quickstart Guide" link — language-specific directory (Tcl settings_4).
+// Documentation "Quickstart guide" link — language-specific directory (Tcl settings_4).
 function quickstartUrl() {
   const map = { de: 'quickstart_de', fr: 'quickstart_fr', es: 'quickstart_es', kr: 'quickstart_kr', 'zh-hans': 'quickstart_zh' };
   return 'https://decentespresso.com/doc/' + (map[currentLangCode()] || 'quickstart') + '/';
@@ -1421,18 +1421,15 @@ const actions = {
     const poll = () => { refreshAppDevices(); if (++n < 10) setTimeout(poll, 1200); };
     setTimeout(poll, 700);
   },
-  // "More Settings" -> Decaid's own settings. Decent.app injects a host bridge
-  // (window.decentApp.exitToDashboard) into the skin's WebView; it returns to the
-  // Decent dashboard, from which the full native settings (newer options this older
-  // UI doesn't expose) are reachable. Outside Decent.app (plain browser) there is no
-  // such host, so fall back to the quickstart docs.
-  moreSettings: () => {
+  docs: () => window.open(quickstartUrl(), '_blank'),
+  // "Exit to Decaid" -> return to the Decent dashboard (where the full native
+  // settings, incl. newer options this older UI doesn't expose, live). Decent.app
+  // injects the host bridge window.decentApp.exitToDashboard into the skin's WebView;
+  // outside Decent.app (plain browser) there's no host, so just inform the user.
+  exitApp: () => {
     if (window.decentApp && typeof window.decentApp.exitToDashboard === 'function') window.decentApp.exitToDashboard();
-    else { toast('Open this skin inside the Decent app to reach these settings'); window.open(quickstartUrl(), '_blank'); }
+    else toast('Open this skin inside the Decent app to exit to Decaid');
   },
-  // Tcl "Exit app" sleeps the machine + exits the native app. A web/Catalyst build
-  // can't quit itself, so we sleep the machine (the meaningful part) and close settings.
-  exitApp: () => { api.setMachineState('sleeping').catch(() => {}); actions.cancel(); },
   // PRESETS / ADVANCED
   openEditor: () => openProfileEditor(() => goto('advanced')),
   advTempUp: () => advTemp(+1), advTempDown: () => advTemp(-1),

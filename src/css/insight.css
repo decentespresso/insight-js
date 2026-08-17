@@ -316,9 +316,9 @@ html, body { margin: 0; background: #000; color: var(--ins-ink); overflow: hidde
    space); the title stays fixed and the device rows scroll when the list is long. */
 .app-dev-col { position: absolute; top: 1085px; width: 545px; height: 300px; display: flex; flex-direction: column; }
 .app-dev-title { font-size: 30px; font-weight: 700; color: #7f879a; margin-bottom: 6px; flex: 0 0 auto; }
-.app-dev-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; pointer-events: auto; -webkit-overflow-scrolling: touch; margin-right: -14px; }
-.app-dev-list::-webkit-scrollbar { width: 80px; }
-.app-dev-list::-webkit-scrollbar-thumb { background: #c7cbe4; border-radius: 40px; border: 20px solid transparent; background-clip: content-box; }
+.app-dev-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; pointer-events: auto; -webkit-overflow-scrolling: touch; margin-right: -20px; }
+.app-dev-list::-webkit-scrollbar { width: 120px; }
+.app-dev-list::-webkit-scrollbar-thumb { background: #c7cbe4; border-radius: 30px; border: 30px solid transparent; background-clip: content-box; }
 .app-dev-list::-webkit-scrollbar-track { background: transparent; }
 .app-dev-none { font-size: 30px; color: #a9adbc; margin-top: 8px; }
 .app-dev-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; pointer-events: auto; padding: 12px 0; }
