@@ -60,24 +60,24 @@ export const steamConfig = {
     // ---- Information card (right column, RUNNING page only) — faithful to Tcl Insight
     // steam Information: Steaming / Auto-off / Temperature / Pressure / Flow rate max / now ----
     row(['steam'], 1840, 250, 'nw', C.title, () => t('Information'), { size: F.title, weight: 'bold' }),
-    row(['steam'], 1840, 290, 'nw', C.slabel, () => t('Steaming'), { size: F.set }),
-    row(['steam'], 2500, 290, 'ne', C.sval, (l) => `${n0(l.runElapsed)} ${t('seconds')}`, { size: F.set }),
-    row(['steam'], 1840, 360, 'nw', C.slabel, () => t('Auto-Off'), { size: F.set }),
-    row(['steam'], 2500, 360, 'ne', C.sval, (l) => `${n0(l.steamDuration)} ${t('seconds')}`, { size: F.set }),
-    row(['steam'], 1840, 430, 'nw', C.slabel, () => t('Temperature'), { size: F.set }),
-    row(['steam'], 2500, 430, 'ne', C.sval, (l) => `${fmtTemp(l.steamTemp, 0)}`, { size: F.set }),
-    row(['steam'], 1840, 500, 'nw', C.slabel, () => t('Pressure (bar)'), { size: F.set }),
-    row(['steam'], 2500, 500, 'ne', C.sval, (l) => `${n1(l.pressure)}`, { size: F.set }),
-    row(['steam'], 1840, 570, 'nw', C.slabel, () => t('Flow rate max'), { size: F.set }),
-    row(['steam'], 2500, 570, 'ne', C.sval, (l) => `${n1(l.steamFlowMax)} mL/s`, { size: F.set }),
-    row(['steam'], 1840, 640, 'nw', C.slabel, () => t('Flow rate now'), { size: F.set }),
-    row(['steam'], 2500, 640, 'ne', C.sval, (l) => `${n1(l.flow)} mL/s`, { size: F.set }),
+    row(['steam'], 1840, 325, 'nw', C.slabel, () => t('Steaming'), { size: F.set }),
+    row(['steam'], 2500, 325, 'ne', C.sval, (l) => `${n0(l.runElapsed)} ${t('seconds')}`, { size: F.set }),
+    row(['steam'], 1840, 395, 'nw', C.slabel, () => t('Auto-Off'), { size: F.set }),
+    row(['steam'], 2500, 395, 'ne', C.sval, (l) => `${n0(l.steamDuration)} ${t('seconds')}`, { size: F.set }),
+    row(['steam'], 1840, 465, 'nw', C.slabel, () => t('Temperature'), { size: F.set }),
+    row(['steam'], 2500, 465, 'ne', C.sval, (l) => `${fmtTemp(l.steamTemp, 0)}`, { size: F.set }),
+    row(['steam'], 1840, 535, 'nw', C.slabel, () => t('Pressure (bar)'), { size: F.set }),
+    row(['steam'], 2500, 535, 'ne', C.sval, (l) => `${n1(l.pressure)}`, { size: F.set }),
+    row(['steam'], 1840, 605, 'nw', C.slabel, () => t('Flow rate max'), { size: F.set }),
+    row(['steam'], 2500, 605, 'ne', C.sval, (l) => `${n1(l.steamFlowMax)} mL/s`, { size: F.set }),
+    row(['steam'], 1840, 675, 'nw', C.slabel, () => t('Flow rate now'), { size: F.set }),
+    row(['steam'], 2500, 675, 'ne', C.sval, (l) => `${n1(l.flow)} mL/s`, { size: F.set }),
 
     // ---- DONE page (steam_3): "Information" header + the two timers, per Tcl
     // "Steaming: Xs" / "Done: Xs" ----
     row(['steam_3'], 1840, 250, 'nw', C.title, () => t('Information'), { size: F.title, weight: 'bold' }),
-    row(['steam_3'], 1840, 290, 'nw', C.slabel, (l) => `${t('Steaming')}: ${n0(l.runElapsed)}s`, { size: F.set }),
-    row(['steam_3'], 1840, 360, 'nw', C.slabel, (l) => `${t('Done')}: ${n0(l.doneElapsed)}s`, { size: F.set }),
+    row(['steam_3'], 1840, 325, 'nw', C.slabel, (l) => `${t('Steaming')}: ${n0(l.runElapsed)}s`, { size: F.set }),
+    row(['steam_3'], 1840, 395, 'nw', C.slabel, (l) => `${t('Done')}: ${n0(l.doneElapsed)}s`, { size: F.set }),
 
     // ---- live pressure / flow / temperature mini graph — small, bottom-aligned to
     // the lower-right card (Tcl: 700x300 at 1810,1090; card bottom ~1391). Tap to zoom. ----
