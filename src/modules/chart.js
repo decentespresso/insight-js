@@ -125,13 +125,19 @@ export class EspressoChart {
 export class MiniChart {
   constructor(el, opts = {}) {
     this.el = el; this.series = opts.series || [{ key: 'temp', color: COL.temp }];
-    this.traces = this.series.map((s) => trace(s.color, 'x', 'y', null, 7));
-    this.layout = { margin: { l: 64, r: 18, t: 20, b: 30 }, showlegend: false,
+    // A series may opt onto a right-hand secondary axis (axis:'y2') — used so the
+    // steam chart can show temperature (~150°C) alongside pressure/flow (0-3) without
+    // one squashing the other.
+    const hasY2 = this.series.some((s) => s.axis === 'y2');
+    this.traces = this.series.map((s) => trace(s.color, 'x', s.axis === 'y2' ? 'y2' : 'y', null, 7));
+    this.layout = { margin: { l: 64, r: hasY2 ? 64 : 18, t: 20, b: 30 }, showlegend: false,
       paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: COL.bg,
       xaxis: { gridcolor: COL.grid, gridwidth: 2, zeroline: false, fixedrange: true, showline: false,
         ticks: '', showticklabels: false, rangemode: 'tozero', autorange: true },
       yaxis: { gridcolor: COL.grid, gridwidth: 2, zeroline: false, fixedrange: true, showline: false,
         tickfont: { color: '#8a8a8a', size: 28, family: FONT }, autorange: true },
+      ...(hasY2 ? { yaxis2: { overlaying: 'y', side: 'right', zeroline: false, fixedrange: true, showline: false,
+        gridcolor: 'rgba(0,0,0,0)', tickfont: { color: '#ff7880', size: 28, family: FONT }, autorange: true } } : {}),
       annotations: [{ text: opts.title || '', xref: 'paper', yref: 'paper', x: 0, xanchor: 'left',
         y: 1.02, yanchor: 'bottom', showarrow: false, font: { color: opts.titleColor || COL.temp, size: 30, family: FONT, weight: 700 } }],
       datarevision: 0 };

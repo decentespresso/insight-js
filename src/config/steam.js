@@ -52,10 +52,27 @@ export const steamConfig = {
     row(['steam_1'], 1096, 1318, 'nw', C.slabel, () => t('Flow rate max'), { size: F.set }),
     row(['steam_1'], 1690, 1318, 'ne', C.sval, (l) => `${n1(l.steamFlowMax)} mL/s`, { size: F.set }),
 
-    // ---- live steam temp on running page (stacked under STOP / STEAM in the ring) ----
+    // ---- live steam temp under the STOP / STEAM ring ----
     row(['steam'], 1394, 946, 'center', C.title, (l) => `${fmtTemp(l.steamTemp, 0)}`, { size: 46 }),
-    // ---- live mini temperature graph (left card area) on the running page ----
-    { kind: 'graph', id: 'steam_mini', pages: ['steam'], rect: [110, 470, 940, 1180] },
+
+    // ---- Information card (right column) — faithful to Tcl Insight steam Information:
+    // Steaming time / Auto-off / Temperature / Pressure / Flow rate max / Flow rate now ----
+    row(['steam'], 1840, 250, 'nw', C.title, () => t('Information'), { size: F.title, weight: 'bold' }),
+    row(['steam'], 1840, 360, 'nw', C.slabel, () => t('Steaming'), { size: F.set }),
+    row(['steam'], 2500, 360, 'ne', C.sval, (l) => `${n0(l.runElapsed)} ${t('seconds')}`, { size: F.set }),
+    row(['steam'], 1840, 430, 'nw', C.slabel, () => t('Auto-Off'), { size: F.set }),
+    row(['steam'], 2500, 430, 'ne', C.sval, (l) => `${n0(l.steamDuration)} ${t('seconds')}`, { size: F.set }),
+    row(['steam'], 1840, 500, 'nw', C.slabel, () => t('Temperature'), { size: F.set }),
+    row(['steam'], 2500, 500, 'ne', C.sval, (l) => `${fmtTemp(l.steamTemp, 0)}`, { size: F.set }),
+    row(['steam'], 1840, 570, 'nw', C.slabel, () => t('Pressure (bar)'), { size: F.set }),
+    row(['steam'], 2500, 570, 'ne', C.sval, (l) => `${n1(l.pressure)}`, { size: F.set }),
+    row(['steam'], 1840, 640, 'nw', C.slabel, () => t('Flow rate max'), { size: F.set }),
+    row(['steam'], 2500, 640, 'ne', C.sval, (l) => `${n1(l.steamFlowMax)} mL/s`, { size: F.set }),
+    row(['steam'], 1840, 710, 'nw', C.slabel, () => t('Flow rate now'), { size: F.set }),
+    row(['steam'], 2500, 710, 'ne', C.sval, (l) => `${n1(l.flow)} mL/s`, { size: F.set }),
+
+    // ---- live pressure / flow / temperature mini graph — small, lower-right ----
+    { kind: 'graph', id: 'steam_mini', pages: ['steam'], rect: [1780, 800, 2500, 1180] },
 
     // full-width flow-rate slider at the bottom (left of the power button). Shown on
     // the running page too so steam flow can be adjusted live while steaming.

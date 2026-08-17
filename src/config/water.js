@@ -54,7 +54,18 @@ export const waterConfig = {
       adj: { key: 'waterFlowMax', min: 1, max: 10, step: 1, set: (v) => ({ hotWaterData: { flow: v } }) },
       valueBind: (l) => l.waterFlowMax, action: 'slideFlow' },
     row(['water'], 1394, 1010, 'center', C.title, (l) => `${n0(l.weight)} g`, { size: 44 }),
-    // ---- live mini temperature + weight graph (left card area) on the run page ----
-    { kind: 'graph', id: 'water_mini', pages: ['water'], rect: [110, 470, 940, 1180] },
+    // ---- Information card (right column). The Tcl Insight water page has no graph —
+    // hot water shows live stats instead of a chart. ----
+    row(['water'], 1840, 250, 'nw', C.title, () => t('Information'), { size: F.title, weight: 'bold' }),
+    row(['water'], 1840, 360, 'nw', C.slabel, () => t('Pouring'), { size: F.set }),
+    row(['water'], 2500, 360, 'ne', C.sval, (l) => `${n0(l.runElapsed)} ${t('seconds')}`, { size: F.set }),
+    row(['water'], 1840, 430, 'nw', C.slabel, () => t('Temperature'), { size: F.set }),
+    row(['water'], 2500, 430, 'ne', C.sval, (l) => `${fmtTemp(l.mixTemp, 0)}`, { size: F.set }),
+    row(['water'], 1840, 500, 'nw', C.slabel, () => t('Volume'), { size: F.set }),
+    row(['water'], 2500, 500, 'ne', C.sval, (l) => `${n0(l.waterVolume)} mL`, { size: F.set }),
+    row(['water'], 1840, 570, 'nw', C.slabel, () => t('Flow rate max'), { size: F.set }),
+    row(['water'], 2500, 570, 'ne', C.sval, (l) => `${n1(l.waterFlowMax)} mL/s`, { size: F.set }),
+    row(['water'], 1840, 640, 'nw', C.slabel, () => t('Flow rate now'), { size: F.set }),
+    row(['water'], 2500, 640, 'ne', C.sval, (l) => `${n1(l.flow)} mL/s`, { size: F.set }),
   ],
 };

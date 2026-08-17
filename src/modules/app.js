@@ -22,14 +22,14 @@ const live = { pageState: 'off', family: 'espresso', substate: '', pressure: 0, 
   profileTitle: '', profileType: 'Profile', targetVolume: 0, targetWeight: 0, currentStep: '',
   steamDuration: 30, waterVolume: 50, waterTemp: 90, flushSeconds: 10,
   waterFlowMax: 10, flushFlowMax: 6, steamTarget: 150, steamFlowMax: 2.5, steamPreheat: 160,
-  steamEnabled: true, resistanceOn: false };
+  steamEnabled: true, resistanceOn: false, runElapsed: 0 };
 
 // shared shot data buffer (all charts render from it)
 const buf = { t: [], p: [], pg: [], f: [], fg: [], w: [], T: [], Tg: [], r: [] };
 const resetBuf = () => { for (const k in buf) buf[k] = []; };
 // steam/water run buffer for the running-page mini graphs
-const runBuf = { t: [], temp: [], w: [] };
-const resetRunBuf = () => { runBuf.t = []; runBuf.temp = []; runBuf.w = []; };
+const runBuf = { t: [], temp: [], w: [], p: [], f: [] };   // steam/water run: time, temp, weight, pressure, flow
+const resetRunBuf = () => { runBuf.t = []; runBuf.temp = []; runBuf.w = []; runBuf.p = []; runBuf.f = []; };
 let runStart = null;
 
 // profile preview curve (target pressure/flow/temp step lines from profile steps)
@@ -279,7 +279,9 @@ const host = new PageHost(stage, config, actions);
 host.registerGraph('espresso_chart', (n) => new EspressoChart(n));
 host.registerGraph('zoom_pf', (n) => new ZoomChart(n, 'pf'));
 host.registerGraph('zoom_temp', (n) => new ZoomChart(n, 'temp'));
-host.registerGraph('steam_mini', (n) => new MiniChart(n, { series: [{ key: 'temp', color: '#ff7880' }], title: `${t('Steam temperature')} (${tempSym()})`, titleColor: '#ff7880' }));
+host.registerGraph('steam_mini', (n) => new MiniChart(n, { series: [
+  { key: 'p', color: '#18c37e' }, { key: 'f', color: '#4e85f4' }, { key: 'temp', color: '#ff7880', axis: 'y2' },
+], title: `${t('Pressure')} · ${t('Flow')} · ${t('Temperature')}`, titleColor: '#7f879a' }));
 host.registerGraph('water_mini', (n) => new MiniChart(n, { series: [{ key: 'temp', color: '#ff7880' }, { key: 'w', color: '#a2693d' }], title: `${t('Temperature')} (${tempSym()}) · ${t('weight')} (g)`, titleColor: '#ff7880' }));
 
 async function loadWorkflow() {
@@ -345,9 +347,10 @@ function onSnapshot(d) {
   } else if (st === 'steam' || st === 'hotWater') {
     // feed the running-page mini graph (steam temperature, or water temp+weight)
     const el = runStart ? (performance.now() - runStart) / 1000 : 0;
-    runBuf.t.push(el);
+    runBuf.t.push(el); live.runElapsed = el;
     runBuf.temp.push(st === 'steam' ? d.steamTemperature : d.mixTemperature);
     runBuf.w.push(curWeight);
+    runBuf.p.push(d.pressure); runBuf.f.push(d.flow);
     const mini = host.graphs[st === 'steam' ? 'steam_mini' : 'water_mini'];
     if (mini) mini.render(runBuf);
   }
