@@ -11,6 +11,7 @@ import { openSettings, isSettingsOpen, settingsGoto, closeSettings, settingsShow
 import { openProfileEditor } from '../views/profile_editor.js';
 import { openNumpad } from '../views/numpad.js';
 import { openSaver, closeSaver, isSaverOpen } from '../views/saver.js';
+import { openModal, closeModal } from './overlay.js';
 import { initI18n, t, tempSym } from './i18n.js';
 
 setDebug(true);
@@ -240,6 +241,17 @@ const actions = {
   zoomPF: () => showPage(baseOf(live.pageState) + '_zoomed'),
   zoomTemp: () => { tempLevel = 0; showPage(baseOf(live.pageState) + '_zoomed_temperature'); },
   unzoom: () => showPage(baseOf(live.pageState)),
+  // Tap the small steam chart -> full-screen large chart overlay; tap it to return.
+  zoomSteam: () => {
+    const box = document.createElement('div');
+    box.style.cssText = 'position:absolute;inset:0;background:#eef0f7;cursor:pointer;';
+    const chartEl = document.createElement('div'); chartEl.style.cssText = 'position:absolute;inset:60px;';
+    box.appendChild(chartEl); box.addEventListener('click', closeModal);
+    openModal(box);
+    const big = new MiniChart(chartEl, { series: steamSeries(), title: '' });
+    big.render(runBuf);
+    requestAnimationFrame(() => big.resize());
+  },
   toggleSteam: () => {
     live.steamEnabled = !live.steamEnabled;
     if (live.steamEnabled) live.steamTarget = steamDesiredTemp();          // restore desired
@@ -279,10 +291,12 @@ const host = new PageHost(stage, config, actions);
 host.registerGraph('espresso_chart', (n) => new EspressoChart(n));
 host.registerGraph('zoom_pf', (n) => new ZoomChart(n, 'pf'));
 host.registerGraph('zoom_temp', (n) => new ZoomChart(n, 'temp'));
-host.registerGraph('steam_mini', (n) => new MiniChart(n, { series: [
+// No title — it was truncated at the top of the small chart and stole plot height.
+const steamSeries = () => [
   { key: 'p', color: '#18c37e' }, { key: 'f', color: '#4e85f4' },
   { key: 'temp', color: '#ff7880', scale: 0.01 },   // temp ÷100 shares the 0-3 flow/pressure axis (Tcl steam_temperature100th)
-], title: `${t('Pressure')} · ${t('Flow')} · ${t('Temperature')}`, titleColor: '#7f879a' }));
+];
+host.registerGraph('steam_mini', (n) => new MiniChart(n, { series: steamSeries(), title: '' }));
 host.registerGraph('water_mini', (n) => new MiniChart(n, { series: [{ key: 'temp', color: '#ff7880' }, { key: 'w', color: '#a2693d' }], title: `${t('Temperature')} (${tempSym()}) · ${t('weight')} (g)`, titleColor: '#ff7880' }));
 
 async function loadWorkflow() {
@@ -393,7 +407,7 @@ function onStateChange(prev, next) {
     // controls + RESTART. Water / flush have no such done page, so they return to
     // their editable base page (settings + START + live flow slider).
     if (prevFam === 'espresso') { startDoneTimer(); showPage(families.espresso.done); }
-    else if (prevFam === 'steam') showPage(families.steam.done);
+    else if (prevFam === 'steam') { startDoneTimer(); showPage(families.steam.done); }   // "Done: Xs" counts up
     else showPage(families[prevFam].base);
   } else if (next === 'idle') {
     showPage(families[currentFamily].base);
