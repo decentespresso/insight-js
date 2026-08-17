@@ -54,9 +54,6 @@ export const steamConfig = {
     row(['steam_1'], 1096, 1318, 'nw', C.slabel, () => t('Flow rate max'), { size: F.set }),
     row(['steam_1'], 1690, 1318, 'ne', C.sval, (l) => `${n1(l.steamFlowMax)} mL/s`, { size: F.set }),
 
-    // ---- live steam temp under the STOP / STEAM ring ----
-    row(['steam'], 1394, 946, 'center', C.title, (l) => `${fmtTemp(l.steamTemp, 0)}`, { size: 46 }),
-
     // ---- Information card (right column, RUNNING page only) — faithful to Tcl Insight
     // steam Information: Steaming / Auto-off / Temperature / Pressure / Flow rate max / now ----
     row(['steam'], 1840, 250, 'nw', C.title, () => t('Information'), { size: F.title, weight: 'bold' }),
