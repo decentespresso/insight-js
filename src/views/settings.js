@@ -1405,7 +1405,18 @@ const actions = {
   transport: () => { machineActionUrl('transport'); openMaintenance('transport', clearMachineActionUrl); },
   // APP
   editBrightness: () => num('Screen brightness (%)', 'brightness', 5, 100, 5, (v) => api.setBrightness(v)),
-  searchDevices: () => { toast('Scanning for Bluetooth devices…'); api.scanDevices(false).catch((e) => logger.warn('scan', e)).finally(() => setTimeout(refreshAppDevices, 1000)); },
+  searchDevices: () => {
+    toast('Scanning for Bluetooth devices…');
+    api.scanDevices(false).catch((e) => logger.warn('scan', e));
+    // scanDevices uses quick=true: reaprime starts the scan and returns immediately
+    // (empty array), expecting the client to poll as BLE discovery trickles devices
+    // in over several seconds. A single 1s refresh missed real hardware — it only
+    // ever looked fine against the simulator, whose mock devices are always present.
+    // Poll across the whole discovery window and re-render as devices appear.
+    let n = 0;
+    const poll = () => { refreshAppDevices(); if (++n < 10) setTimeout(poll, 1200); };
+    setTimeout(poll, 700);
+  },
   docs: () => window.open(quickstartUrl(), '_blank'),
   // Tcl "Exit app" sleeps the machine + exits the native app. A web/Catalyst build
   // can't quit itself, so we sleep the machine (the meaningful part) and close settings.
