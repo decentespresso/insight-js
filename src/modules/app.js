@@ -120,7 +120,7 @@ function showPage(p) {
     else activeChart.render(buf);
   }
   // steam/water running-page mini graph: theme + size + (re)draw the run so far
-  const mini = p === 'steam' ? host.graphs.steam_mini : (p === 'water' ? host.graphs.water_mini : null);
+  const mini = (p === 'steam' || p === 'steam_3') ? host.graphs.steam_mini : (p === 'water' ? host.graphs.water_mini : null);
   if (mini) { if (mini.setTheme) mini.setTheme(curTheme()); mini.resize(); mini.render(runBuf); }
 }
 function setFamily(fam) { currentFamily = fam; live.family = fam; showPage(families[fam].base); writeHash('#/' + fam); }
@@ -280,7 +280,8 @@ host.registerGraph('espresso_chart', (n) => new EspressoChart(n));
 host.registerGraph('zoom_pf', (n) => new ZoomChart(n, 'pf'));
 host.registerGraph('zoom_temp', (n) => new ZoomChart(n, 'temp'));
 host.registerGraph('steam_mini', (n) => new MiniChart(n, { series: [
-  { key: 'p', color: '#18c37e' }, { key: 'f', color: '#4e85f4' }, { key: 'temp', color: '#ff7880', axis: 'y2' },
+  { key: 'p', color: '#18c37e' }, { key: 'f', color: '#4e85f4' },
+  { key: 'temp', color: '#ff7880', scale: 0.01 },   // temp ÷100 shares the 0-3 flow/pressure axis (Tcl steam_temperature100th)
 ], title: `${t('Pressure')} · ${t('Flow')} · ${t('Temperature')}`, titleColor: '#7f879a' }));
 host.registerGraph('water_mini', (n) => new MiniChart(n, { series: [{ key: 'temp', color: '#ff7880' }, { key: 'w', color: '#a2693d' }], title: `${t('Temperature')} (${tempSym()}) · ${t('weight')} (g)`, titleColor: '#ff7880' }));
 
@@ -353,6 +354,8 @@ function onSnapshot(d) {
     runBuf.p.push(d.pressure); runBuf.f.push(d.flow);
     const mini = host.graphs[st === 'steam' ? 'steam_mini' : 'water_mini'];
     if (mini) mini.render(runBuf);
+  } else if (st === 'flush') {
+    live.runElapsed = runStart ? (performance.now() - runStart) / 1000 : 0;   // flush stats (no chart)
   }
   host.update(live);
 }
@@ -382,14 +385,15 @@ function onStateChange(prev, next) {
   if (runFam) {
     currentFamily = runFam; live.family = runFam;
     if (next === 'espresso') { shotStart = performance.now(); resetShotStats(); resetBuf(); }
-    if (next === 'steam' || next === 'hotWater') { runStart = performance.now(); resetRunBuf(); }
+    if (next === 'steam' || next === 'hotWater' || next === 'flush') { runStart = performance.now(); resetRunBuf(); }
     showPage(families[runFam].run);
   } else if (prevFam && (next === 'idle' || next === 'ready')) {
-    // Espresso ends on a shot-summary "done" page. Steam / water / flush have no
-    // meaningful done page (theirs is a bare RESTART-only screen with no controls),
-    // so they return to their editable base page — the settings + START and the
-    // live flow slider — which is what should show after the operation completes.
+    // Espresso ends on a shot-summary "done" page. Steam ends on steam_3, which keeps
+    // the just-finished chart + Information (useful diagnostics) alongside editable
+    // controls + RESTART. Water / flush have no such done page, so they return to
+    // their editable base page (settings + START + live flow slider).
     if (prevFam === 'espresso') { startDoneTimer(); showPage(families.espresso.done); }
+    else if (prevFam === 'steam') showPage(families.steam.done);
     else showPage(families[prevFam].base);
   } else if (next === 'idle') {
     showPage(families[currentFamily].base);

@@ -42,6 +42,17 @@ export const flushConfig = {
     // ---- flow-rate row ----
     row(['preheat_1'], 1096, 1318, 'nw', C.slabel, () => t('Flow rate max'), { size: F.set }),
     row(['preheat_1'], 1690, 1318, 'ne', C.sval, (l) => `${n1(l.flushFlowMax)} mL/s`, { size: F.set }),
+    // ---- stats while flushing (preheat_2): the run page showed nothing; show live
+    // info in the lower-right (Flushing time / Flow rate / Flow rate max / Auto-off) ----
+    row(['preheat_2'], 1840, 1130, 'nw', C.slabel, () => t('Flushing'), { size: F.set }),
+    row(['preheat_2'], 2500, 1130, 'ne', C.sval, (l) => `${n0(l.runElapsed)} ${t('seconds')}`, { size: F.set }),
+    row(['preheat_2'], 1840, 1200, 'nw', C.slabel, () => t('Flow rate'), { size: F.set }),
+    row(['preheat_2'], 2500, 1200, 'ne', C.sval, (l) => `${n1(l.flow)} mL/s`, { size: F.set }),
+    row(['preheat_2'], 1840, 1270, 'nw', C.slabel, () => t('Flow rate max'), { size: F.set }),
+    row(['preheat_2'], 2500, 1270, 'ne', C.sval, (l) => `${n1(l.flushFlowMax)} mL/s`, { size: F.set }),
+    row(['preheat_2'], 1840, 1340, 'nw', C.slabel, () => t('Auto-Off'), { size: F.set }),
+    row(['preheat_2'], 2500, 1340, 'ne', C.sval, (l) => `${n0(l.flushSeconds)} ${t('seconds')}`, { size: F.set }),
+
     // full-width flow-rate slider at the bottom (left of the power button). Shown on
     // the running page too so flush flow can be adjusted live while flushing.
     { kind: 'slider', pages: ['preheat_1', 'preheat_2'], rect: [10, 1436, 2000, 1586], handleW: 500, trough: '#d5d9e8', fill: '#f7f5ff',

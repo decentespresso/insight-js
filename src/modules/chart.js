@@ -144,7 +144,17 @@ export class MiniChart {
     this.config = { displayModeBar: false, responsive: true, staticPlot: true };
     Plotly.newPlot(this.el, this.traces, this.layout, this.config);
   }
-  render(buf) { this.traces.forEach((tr, i) => { const k = this.series[i].key; tr.x = buf.t; tr.y = (k === 'temp' || k === 'T') ? cTempArr(buf[k]) : buf[k]; }); this.layout.datarevision++; Plotly.react(this.el, this.traces, this.layout, this.config); }
+  render(buf) {
+    this.traces.forEach((tr, i) => {
+      const s = this.series[i], k = s.key;
+      let y = (k === 'temp' || k === 'T') ? cTempArr(buf[k]) : buf[k];
+      // Optional scale so e.g. steam temperature (÷100, like Tcl steam_temperature100th)
+      // shares the flow/pressure 0-3 axis instead of needing its own.
+      if (s.scale && y) y = y.map((v) => (v == null ? null : v * s.scale));
+      tr.x = buf.t; tr.y = y;
+    });
+    this.layout.datarevision++; Plotly.react(this.el, this.traces, this.layout, this.config);
+  }
   setTheme(theme) { applyChartTheme(this, theme, ['xaxis', 'yaxis']); }
   resize() { try { Plotly.Plots.resize(this.el); } catch (e) { logger.warn('resize', e); } }
 }
