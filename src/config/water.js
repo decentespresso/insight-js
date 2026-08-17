@@ -57,13 +57,13 @@ export const waterConfig = {
     // ---- stats (lower-right, faithful to Tcl Insight water: Pouring / Flow rate /
     // etc. at y~1200). The Tcl water page has no graph — hot water shows stats
     // instead of a chart, placed low so they don't overlap the pitcher graphic. ----
-    row(['water'], 1840, 1124, 'nw', C.slabel, () => t('Pouring'), { size: F.set }),
-    row(['water'], 2500, 1124, 'ne', C.sval, (l) => `${n0(l.runElapsed)} ${t('seconds')}`, { size: F.set }),
-    row(['water'], 1840, 1194, 'nw', C.slabel, () => t('Temperature'), { size: F.set }),
-    row(['water'], 2500, 1194, 'ne', C.sval, (l) => `${fmtTemp(l.mixTemp, 0)}`, { size: F.set }),
-    row(['water'], 1840, 1264, 'nw', C.slabel, () => t('Volume'), { size: F.set }),
-    row(['water'], 2500, 1264, 'ne', C.sval, (l) => `${n0(l.waterVolume)} mL`, { size: F.set }),
-    row(['water'], 1840, 1334, 'nw', C.slabel, () => t('Flow rate'), { size: F.set }),
-    row(['water'], 2500, 1334, 'ne', C.sval, (l) => `${n1(l.flow)} mL/s`, { size: F.set }),
+    row(['water'], 1840, 1118, 'nw', C.slabel, () => t('Pouring'), { size: F.set }),
+    row(['water'], 2500, 1118, 'ne', C.sval, (l) => `${n0(l.runElapsed)} ${t('seconds')}`, { size: F.set }),
+    row(['water'], 1840, 1188, 'nw', C.slabel, () => t('Temperature'), { size: F.set }),
+    row(['water'], 2500, 1188, 'ne', C.sval, (l) => `${fmtTemp(l.mixTemp, 0)}`, { size: F.set }),
+    row(['water'], 1840, 1258, 'nw', C.slabel, () => t('Volume'), { size: F.set }),
+    row(['water'], 2500, 1258, 'ne', C.sval, (l) => `${n0(l.waterVolume)} mL`, { size: F.set }),
+    row(['water'], 1840, 1328, 'nw', C.slabel, () => t('Flow rate'), { size: F.set }),
+    row(['water'], 2500, 1328, 'ne', C.sval, (l) => `${n1(l.flow)} mL/s`, { size: F.set }),
   ],
 };

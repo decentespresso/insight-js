@@ -73,7 +73,9 @@ export const steamConfig = {
     row(['steam'], 1840, 710, 'nw', C.slabel, () => t('Flow rate now'), { size: F.set }),
     row(['steam'], 2500, 710, 'ne', C.sval, (l) => `${n1(l.flow)} mL/s`, { size: F.set }),
 
-    // ---- DONE page (steam_3): only the two timers, per Tcl "Steaming: Xs" / "Done: Xs" ----
+    // ---- DONE page (steam_3): "Information" header + the two timers, per Tcl
+    // "Steaming: Xs" / "Done: Xs" ----
+    row(['steam_3'], 1840, 250, 'nw', C.title, () => t('Information'), { size: F.title, weight: 'bold' }),
     row(['steam_3'], 1840, 360, 'nw', C.slabel, (l) => `${t('Steaming')}: ${n0(l.runElapsed)}s`, { size: F.set }),
     row(['steam_3'], 1840, 430, 'nw', C.slabel, (l) => `${t('Done')}: ${n0(l.doneElapsed)}s`, { size: F.set }),
 

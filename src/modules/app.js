@@ -241,11 +241,21 @@ const actions = {
   zoomPF: () => showPage(baseOf(live.pageState) + '_zoomed'),
   zoomTemp: () => { tempLevel = 0; showPage(baseOf(live.pageState) + '_zoomed_temperature'); },
   unzoom: () => showPage(baseOf(live.pageState)),
-  // Tap the small steam chart -> full-screen large chart overlay; tap it to return.
+  // Tap the small steam chart -> full-screen large chart; tap it to return. The
+  // overlay mirrors #page (2560x1600, CSS-scaled to the stage) so it wears the same
+  // steam-done skin background, and the big chart fills the content area over the
+  // white cards to hide them (per John's #eeeefa request).
   zoomSteam: () => {
+    const pageEl = document.getElementById('page');
+    const dark = curTheme() === 'dark' && config.darkImages && config.darkImages.has('steam_3');
+    const bgUrl = (dark ? config.darkBase : config.imgBase) + 'steam_3.avif';
     const box = document.createElement('div');
-    box.style.cssText = 'position:absolute;inset:0;background:#eef0f7;cursor:pointer;';
-    const chartEl = document.createElement('div'); chartEl.style.cssText = 'position:absolute;inset:60px;';
+    box.style.cssText = 'position:absolute;left:0;top:0;width:2560px;height:1600px;transform-origin:top left;'
+      + `background:#eeeefa url("${bgUrl}") top left/2560px 1600px no-repeat;cursor:pointer;`;
+    // Mirror #page's live scale/position exactly (works regardless of viewport size).
+    box.style.transform = pageEl ? getComputedStyle(pageEl).transform : 'none';
+    const chartEl = document.createElement('div');
+    chartEl.style.cssText = 'position:absolute;left:30px;top:210px;width:2500px;height:1200px;';
     box.appendChild(chartEl); box.addEventListener('click', closeModal);
     openModal(box);
     const big = new MiniChart(chartEl, { series: steamSeries(), title: '' });
