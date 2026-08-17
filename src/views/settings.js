@@ -144,10 +144,11 @@ const appEls = [
   B(P4, [1910, 306, 2530, 510], 'langPicker'),
   B(P4, [1290, 520, 1900, 720], 'misc'),
   B(P4, [1910, 520, 2530, 720], 'extPicker'),
-  // Documentation card (title 1310,820; Quickstart button spans the whole box)
-  V(P4, 1310, 820, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Documentation') }),
-  V(P4, 1900, 980, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('Quickstart guide') }),
-  B(P4, [1290, 860, 2550, 1100], 'docs'),
+  // Advanced card (title 1310,820; "More Settings" button spans the whole box) —
+  // opens Decaid's own settings (which carry newer options this older UI lacks).
+  V(P4, 1310, 820, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Advanced') }),
+  V(P4, 1900, 980, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('More Settings') }),
+  B(P4, [1290, 860, 2550, 1100], 'moreSettings'),
   // Exit app card (title 1310,1130; Exit button spans the whole box)
   V(P4, 1310, 1130, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Exit app') }),
   V(P4, 1900, 1290, { anchor: 'center', size: 48, weight: 'bold', fill: '#ffffff', bind: () => t('Exit') }),
@@ -498,7 +499,10 @@ function renderAppDevices() {
   const column = (x, title, list) => {
     const col = document.createElement('div'); col.className = 'app-dev-col'; col.style.left = x + 'px';
     const h = document.createElement('div'); h.className = 'app-dev-title'; h.textContent = t(title); col.appendChild(h);
-    if (!list.length) { const e = document.createElement('div'); e.className = 'app-dev-none'; e.textContent = t('none found'); col.appendChild(e); }
+    // Rows live in a scrollable inner list so a long device list stays inside the
+    // Connect card (with a scrollbar) instead of spilling past its bottom edge.
+    const listEl = document.createElement('div'); listEl.className = 'app-dev-list'; col.appendChild(listEl);
+    if (!list.length) { const e = document.createElement('div'); e.className = 'app-dev-none'; e.textContent = t('none found'); listEl.appendChild(e); }
     list.forEach((d) => {
       const row = document.createElement('div'); row.className = 'app-dev-row';
       const info = document.createElement('div');
@@ -514,7 +518,7 @@ function renderAppDevices() {
       btn.textContent = connected ? t('Disconnect') : t('Connect');
       btn.addEventListener('click', () => toggleDevice(d, btn));
       row.appendChild(btn);
-      col.appendChild(row);
+      listEl.appendChild(row);
     });
     box.appendChild(col);
   };
@@ -1417,7 +1421,15 @@ const actions = {
     const poll = () => { refreshAppDevices(); if (++n < 10) setTimeout(poll, 1200); };
     setTimeout(poll, 700);
   },
-  docs: () => window.open(quickstartUrl(), '_blank'),
+  // "More Settings" -> Decaid's own settings. Decent.app injects a host bridge
+  // (window.decentApp.exitToDashboard) into the skin's WebView; it returns to the
+  // Decent dashboard, from which the full native settings (newer options this older
+  // UI doesn't expose) are reachable. Outside Decent.app (plain browser) there is no
+  // such host, so fall back to the quickstart docs.
+  moreSettings: () => {
+    if (window.decentApp && typeof window.decentApp.exitToDashboard === 'function') window.decentApp.exitToDashboard();
+    else { toast('Open this skin inside the Decent app to reach these settings'); window.open(quickstartUrl(), '_blank'); }
+  },
   // Tcl "Exit app" sleeps the machine + exits the native app. A web/Catalyst build
   // can't quit itself, so we sleep the machine (the meaningful part) and close settings.
   exitApp: () => { api.setMachineState('sleeping').catch(() => {}); actions.cancel(); },
