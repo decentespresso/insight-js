@@ -7,7 +7,7 @@ import { PageHost, curTheme } from './page.js';
 import { EspressoChart, ZoomChart, MiniChart } from './chart.js';
 import { config, families, stateToFamily } from '../config/index.js';
 import { openProfileSelector } from '../views/profile_selector.js';
-import { openSettings, isSettingsOpen, settingsGoto, closeSettings, settingsShowChooser, settingsEditProfile, settingsMachineAction, settingsAppAction, settingsCalStep, settingsLastTab } from '../views/settings.js';
+import { openSettings, isSettingsOpen, settingsGoto, closeSettings, settingsShowChooser, settingsEditProfile, settingsMachineAction, settingsAppAction, settingsPresetAction, settingsCalStep, settingsLastTab } from '../views/settings.js';
 import { openProfileEditor } from '../views/profile_editor.js';
 import { openNumpad } from '../views/numpad.js';
 import { openSaver, closeSaver, isSaverOpen } from '../views/saver.js';
@@ -147,6 +147,8 @@ const settingsHooks = {
   onMachineAction: (name) => writeHash(name ? '#/settings/machine/' + name : '#/settings/machine'),
   // App tab sub-page (Misc) -> its own URL; null clears back to the plain app tab.
   onAppAction: (name) => writeHash(name ? '#/settings/app/' + name : '#/settings/app'),
+  // Presets tab sub-page (Notes editor) -> its own URL; null clears back to the tab.
+  onPresetAction: (name) => writeHash(name ? '#/settings/presets/' + name : '#/settings/presets'),
   // Calibrate step (warning / 1 / 2 / 3) -> its own URL under the calibrate flow.
   onCalStep: (step) => writeHash(step ? '#/settings/machine/calibrate/' + step : '#/settings/machine'),
 };
@@ -183,6 +185,12 @@ async function applyRoute() {
       if (parts[1] === 'app' && APP_ACTIONS.includes(parts[2])) {
         if (!isSettingsOpen()) await openSettings('app', settingsHooks); else await settingsGoto('app');
         settingsAppAction(parts[2]);
+        return;
+      }
+      // #/settings/presets/notes -> open the presets tab, then the Notes editor.
+      if (parts[1] === 'presets' && parts[2] === 'notes') {
+        if (!isSettingsOpen()) await openSettings('presets', settingsHooks); else await settingsGoto('presets');
+        settingsPresetAction('notes');
         return;
       }
       const tab = SETTINGS_TABS.includes(parts[1]) ? parts[1] : 'machine';

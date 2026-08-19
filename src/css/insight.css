@@ -193,6 +193,23 @@ html, body { margin: 0; background: #000; color: var(--ins-ink); overflow: hidde
 .s2-dialog-content { position: absolute; left: 320px; top: 430px; width: 1920px; height: 750px; overflow-y: auto;
   padding: 0 40px 30px; font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
 
+/* Notes editor textarea — fills the settings_message white panel. Tcl's entry is
+   a 2070x730 canvas at 250,440 in white with #4e85f4 ink (de1_skin_settings.tcl
+   :2066); .s2-dialog-content already provides that box, so this fills it. */
+.s2-notes-input { display: block; width: 100%; height: 100%; box-sizing: border-box; resize: none;
+  border: none; outline: none; background: #ffffff; color: #4e85f4; padding: 0;
+  font-family: 'InsightUI', Helvetica, Arial, sans-serif; font-size: 42px; line-height: 1.35;
+  /* nudged off the shared dialog panel's origin (John, 2026-08-19): ~20px left and
+     ~2px down as seen on screen. transform, not margin, so the box keeps its width. */
+  transform: translate(-40px, 4px); }
+.s2-notes-input[readonly] { color: #7f879a; height: calc(100% - 60px); }   /* built-in preset: shown, not editable (room for the note below) */
+.s2-notes-ro { margin-top: 14px; font-size: 30px; color: #b06a6a; font-style: italic;
+  font-family: 'InsightUI', Helvetica, Arial, sans-serif; }
+.s2-notes-input::-webkit-scrollbar { width: 130px; }
+.s2-notes-input::-webkit-scrollbar-track { background: transparent; }
+.s2-notes-input::-webkit-scrollbar-thumb { background: #f7f5ff; border-radius: 50px; border: 14px solid transparent;
+  background-clip: padding-box; min-height: 160px; box-shadow: inset 0 0 0 3px #b4b6cb; }
+
 /* ---- Finger-friendly scrollbars ---- */
 /* This skin runs on the DE1's touchscreen, so scroll thumbs must be wide enough
    to grab with a finger. Authored in 2560-space (scaled with #page). NOTE: do not

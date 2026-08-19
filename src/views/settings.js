@@ -34,6 +34,14 @@ const V = (pages, x, y, o) => ({ kind: 'var', pages, x, y, anchor: o.anchor || '
   spacing: o.spacing, width: o.width, wrap: o.wrap, justify: o.justify, clamp: o.clamp, scroll: o.scroll, notPages: o.notPages });
 const B = (pages, rect, action, notPages) => ({ kind: 'button', pages, rect, action, notPages });
 
+// decaid rejects any profile body on a bundled default (profile_controller.dart:
+// `existing.isDefault && profile != null`), so notes are editable on everything
+// except a built-in. The Notes page still opens on a default so the full text can
+// be read (the card clamps it) — just read-only.
+// A brand-new preset has no id yet and is NOT a default: its notes are editable
+// and held in the working copy until the piggy saves the profile.
+const canEditNotes = (sel) => !!(sel && !sel.isDefault);
+
 // The 4 settings tabs share this top bar (icons are baked; labels overlaid).
 const PAGES = { presets: 'settings_1', advanced: 'settings_2c', machine: 'settings_3', app: 'settings_4' };
 // x positions from the Tcl (de1_skin_settings.tcl pos_*_label): centred between
@@ -175,9 +183,12 @@ const presetEls = [
   B(P1, [2404, 192, 2590, 320], 'previewTempUp'),
   B(P1, [2404, 600, 2590, 730], 'previewTempDown'),
   V(P1, 2470, 600, { anchor: 'center', size: 44, weight: 'bold', fill: '#7f879a', bind: (l) => fmtTemp(l.previewTemp ?? 92, 0) }),
-  // Description card [1325,804,2528,1213] — scrollable box (finger scrollbar on overflow)
+  // Description card [1325,804,2528,1213]. The whole card is a button onto the
+  // full-page Notes editor (as in the Tcl), so the text is clamped, not scrolled:
+  // a scroll box takes pointer events and would swallow the tap.
   V(P1, 1360, 839, { size: 50, weight: 'bold', fill: C.title, bind: () => t('Description') }),
-  V(P1, 1360, 925, { size: 34, fill: C.muted, width: 1140, wrap: true, scroll: 250, bind: (l) => l.presetDesc || '' }),
+  V(P1, 1360, 925, { size: 34, fill: C.muted, width: 1140, wrap: true, clamp: 6, bind: (l) => l.presetDesc || '' }),
+  B(P1, [1325, 804, 2528, 1213], 'editNotes'),
   // Pick-a-name card [1325,1226,2528,1376] — the name is an injected text input
   V(P1, 1360, 1249, { size: 44, weight: 'bold', fill: C.title, bind: () => t('Pick a new name to save') }),
   // middle-column baked buttons: trash (delete) / + (new) / eye (visibility) ; piggy (save)
@@ -855,6 +866,7 @@ function subPanel(title, build) {
   const ms = host.page.querySelector('.mach-sched'); if (ms) ms.style.display = 'none';     // and the keep-hot schedule sliders
   const ad = host.page.querySelector('.app-devices'); if (ad) ad.style.display = 'none';    // and the app device list
   const ab = host.page.querySelector('.app-bright'); if (ab) ab.style.display = 'none';     // and the brightness slider
+  presetChrome(false);                                                                      // and the PRESETS list + name field
   const content = document.createElement('div'); content.className = 's2-dialog-content';
   host.page.appendChild(content);
   build(content);
@@ -862,6 +874,7 @@ function subPanel(title, build) {
 // Remove the dialog content (navigation is left to the caller: dialogOk returns
 // to the origin page; goto()/cleanup() move elsewhere themselves).
 function closeSubPanel() {
+  dialogCommit = null;   // a dialog dismissed by any route other than Ok discards its pending write
   if (!host) return;
   const c = host.page.querySelector('.s2-dialog-content');
   if (c) c.remove();
@@ -881,6 +894,7 @@ function dialogClose() {
   renderAppBrightness();
   if (curTab === 'machine') clearMachineActionUrl();   // drop the /machine/<action> deep-link
   if (curTab === 'app') clearAppActionUrl();           // drop the /app/<action> deep-link (e.g. /app/misc)
+  if (curTab === 'presets') clearPresetActionUrl();    // drop the /presets/notes deep-link
 }
 // Deep-link helpers: each MACHINE sub-action (clean/descale/transport/calibrate/
 // firmware) owns a #/settings/machine/<action> URL so it survives a refresh.
@@ -888,6 +902,10 @@ function machineActionUrl(name) { if (hooks.onMachineAction) hooks.onMachineActi
 function clearMachineActionUrl() { if (hooks.onMachineAction) hooks.onMachineAction(null); }
 // Route-driven trigger (called by app.js applyRoute for #/settings/machine/<action>).
 export function settingsMachineAction(name) { const fn = actions[name]; if (fn) fn(); }
+// The PRESETS tab's Notes editor owns #/settings/presets/notes so it survives a refresh.
+function presetActionUrl(name) { if (hooks.onPresetAction) hooks.onPresetAction(name); }
+function clearPresetActionUrl() { if (hooks.onPresetAction) hooks.onPresetAction(null); }
+export function settingsPresetAction(name) { const fn = actions[name === 'notes' ? 'editNotes' : name]; if (fn) fn(); }
 // The APP tab's Misc sub-page owns #/settings/app/misc so it survives a refresh.
 function appActionUrl(name) { if (hooks.onAppAction) hooks.onAppAction(name); }
 function clearAppActionUrl() { if (hooks.onAppAction) hooks.onAppAction(null); }
@@ -990,6 +1008,64 @@ function firmwarePanel(body) {
 // stop-at-weight-offset, which have no gateway field yet).
 let calPage = 0;
 let calAfterWarn = null;   // dialogOk consumes this to advance the warning gate -> calibrate
+
+// ---- Notes editor (Tcl `profile_notes` page) -------------------------------
+// de1_skin_settings.tcl:2049-2066 — the Description card on settings_1 is a
+// button onto a full-page notes editor on the settings_message frame: title
+// "Notes", a multiline entry, and Ok. The Tcl only marks the profile changed if
+// the text actually differs, so this saves on Ok and only when it changed.
+// A dialog with edits to persist parks them here; dialogOk runs it on the way
+// out (Cancel is the tab bar's own action and never calls this).
+let dialogCommit = null;
+function runDialogCommit() { const f = dialogCommit; dialogCommit = null; if (f) f(); }
+
+function notesPanel(body) {
+  const sel = live._sel;
+  const editable = canEditNotes(sel);
+  const ta = document.createElement('textarea');
+  ta.className = 's2-notes-input';
+  ta.value = (sel && sel.p.notes) || '';        // the raw notes, never the '(no description)' placeholder
+  ta.spellcheck = false;
+  ta.readOnly = !editable;
+  body.appendChild(ta);
+  if (!editable) {
+    body.appendChild(spEl('div', 's2-notes-ro', t("Built-in preset — notes can't be edited")));
+    return;                                     // nothing to commit; Ok just closes
+  }
+  setTimeout(() => ta.focus(), 0);
+  const before = ta.value;
+  dialogCommit = () => { if (ta.value !== before) saveNotes(sel, ta.value); };   // unchanged -> no write, mirroring the Tcl
+}
+
+// Persist edited notes. reaprime content-hashes profiles from their execution
+// fields only, so notes ride in metadataHash and the profile id does not change:
+// this is an in-place PUT, not a fork. decaid refuses ANY profile body on a
+// default profile (profile_controller.dart:225), even a presentation-only one,
+// so say that plainly instead of failing silently.
+async function saveNotes(sel, text) {
+  if (!sel) { toast('No preset selected'); return; }
+  // Not stored yet (a preset just built via "+ New"): there is nothing to PUT.
+  // Keep the text on the working copy and in the workflow — loadPresets rebuilds
+  // this virtual selection from the workflow — so the piggy saves it with the profile.
+  if (!sel.id) {
+    sel.p = { ...sel.p, notes: text };
+    live.presetDesc = text || '(no description)';
+    host.update(live);
+    api.updateWorkflow({ profile: { ...sel.p, steps: live._selSteps || sel.p.steps } }).catch((e) => logger.warn('notes wf', e));
+    return;
+  }
+  try {
+    await api.updateProfile(sel.id, { ...sel.p, notes: text });
+    sel.p = { ...sel.p, notes: text };
+    live.presetDesc = text || '(no description)';
+    host.update(live);
+    toast('Saved');
+    await loadPresets();
+  } catch (e) {
+    logger.warn('save notes', e);
+    toast(sel.isDefault ? "Can't edit notes on a built-in preset" : 'Save failed');
+  }
+}
 // Each calibrate step owns a URL: #/settings/machine/calibrate/{warning,1,2,3}.
 function calStepUrl(step) { if (hooks.onCalStep) hooks.onCalStep(step); }
 // Route-driven entry (app.js applyRoute for #/settings/machine/calibrate/<step>).
@@ -1306,7 +1382,7 @@ async function createPreset(kind) {
 
 const actions = {
   navPresets: () => goto('presets'), navAdvanced: () => openAdvancedForSelected(), navMachine: () => goto('machine'), navApp: () => goto('app'),
-  dialogOk: () => { if (calAfterWarn) { const f = calAfterWarn; calAfterWarn = null; f(); return; } dialogClose(); },
+  dialogOk: () => { if (calAfterWarn) { const f = calAfterWarn; calAfterWarn = null; f(); return; } runDialogCommit(); dialogClose(); },
   // New-preset chooser
   newPreset: () => { settingsShowChooser(); if (hooks.onChooser) hooks.onChooser(true); },
   choicesCancel: () => { settingsHideChooser(); if (hooks.onChooser) hooks.onChooser(false); },
@@ -1322,6 +1398,12 @@ const actions = {
   },
   // Tap the preview chart (or the ADVANCED tab) -> edit the selected profile.
   editThisProfile: () => openAdvancedForSelected(),
+  // Description card -> the full-page Notes editor (Tcl's profile_notes page).
+  editNotes: () => {
+    if (!live._sel) { toast('No preset selected'); return; }
+    presetActionUrl('notes');
+    subPanel('Notes', notesPanel);
+  },
   previewTempUp: () => previewTempAdjust(+1),
   previewTempDown: () => previewTempAdjust(-1),
   savePresetName: async () => {
@@ -1335,7 +1417,16 @@ const actions = {
         // Brand-new profile built in the editor ("+ New" or an unsaved edit): POST it
         // under the chosen name, then adopt that title into the workflow so the list
         // re-selects the saved row instead of treating it as unsaved again.
-        await api.saveProfile({ ...sel.p, title: name, steps });
+        const created = await api.saveProfile({ ...sel.p, title: name, steps });
+        // reaprime derives the profile id by hashing the execution fields only, so a
+        // copy whose steps are untouched collides with the profile it was copied from:
+        // the server answers 201 with that EXISTING profile and drops the new title.
+        // "+ New" seeds from the current profile, so this is the normal outcome when
+        // nothing was edited — say so instead of toasting a save that did not happen.
+        if (created && (created.profile?.title || '') !== name) {
+          toast('Adjust the profile (e.g. temperature) to save it under a new name');
+          return;
+        }
         await api.updateWorkflow({ profile: { ...sel.p, title: name, steps } }).catch(() => {});
         toast(`Saved "${name}"`);
         await loadPresets();
