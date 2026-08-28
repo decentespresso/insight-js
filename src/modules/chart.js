@@ -161,7 +161,11 @@ export class MiniChart {
 
 function applyChartTheme(chart, theme, axes) {
   const dark = theme === 'dark';
-  const bg = dark ? '#1b1d29' : COL.bg, grid = dark ? '#3a3d4a' : COL.grid;
+  // Dark mode: keep the plot area TRANSPARENT (paper is already rgba(0,0,0,0)) so
+  // the dark card image behind the chart shows through and the chart reads as
+  // borderless — a solid fill here (was #1b1d29) never matches the tile exactly and
+  // shows as a mismatched rectangle. Light mode keeps its light fill (matches fine).
+  const bg = dark ? 'rgba(0,0,0,0)' : COL.bg, grid = dark ? '#3a3d4a' : COL.grid;
   chart.layout.plot_bgcolor = bg;
   const relayout = { plot_bgcolor: bg };
   axes.forEach((a) => { if (chart.layout[a]) { chart.layout[a].gridcolor = grid; relayout[a + '.gridcolor'] = grid; } });

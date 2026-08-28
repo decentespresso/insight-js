@@ -7,7 +7,7 @@
 // reaprime differs from Tcl, so fields with no gateway endpoint show a dash or a
 // short note rather than being faked (see the session summary for the gap list).
 import * as api from '../modules/api.js';
-import { PageHost } from '../modules/page.js';
+import { PageHost, curTheme } from '../modules/page.js';
 import { MiniChart } from '../modules/chart.js';
 import { openOverlay, closeOverlay } from '../modules/overlay.js';
 import { openProfileEditor } from './profile_editor.js';
@@ -922,11 +922,30 @@ async function skinPanel(body) {
     const col = spEl('div'); col.appendChild(spEl('div', 's2-sp-name', s.name || s.id));
     col.appendChild(spEl('div', 's2-sp-sub', `${s.id}  ·  v${s.version || '?'}${s.id === curId ? '  ·  current' : ''}`));
     row.appendChild(col);
+    // Switching skins: set the default, then RELOAD so the new skin actually loads.
+    // Mirror Streamline EXACTLY (its skin settings do the same and it works): set the
+    // default, then reload after ~2s. The delay matters — decaid re-serves the newly
+    // selected skin's folder after the default changes, and a too-early reload
+    // (we had 400ms) fetches the OLD skin before the re-serve lands.
     row.addEventListener('click', () => api.setDefaultSkin(s.id)
-      .then(() => { toast(`Skin set to ${s.name || s.id}`); subPanel('Skin', skinPanel); })
+      .then(() => { toast(`Skin set to ${s.name || s.id} — reloading…`); setTimeout(() => window.location.reload(), 2000); })
       .catch((e) => { logger.warn('setSkin', e); toast('Set skin failed'); }));
     body.appendChild(row);
   });
+  // "Check for current skin updates" — re-pull the installed skins from their GitHub
+  // source (POST /webui/skins/update), like Streamline's skin-settings button, then
+  // reload so an updated current skin takes effect without a relaunch.
+  const upd = spEl('button', 's2-sp-btn', t('Check for current skin updates'));
+  upd.style.marginTop = '20px';
+  upd.addEventListener('click', async () => {
+    upd.disabled = true; const was = upd.textContent; upd.textContent = t('Checking for skin updates…');
+    try {
+      const res = await api.updateSkins();
+      if (res && res.ok === false) throw new Error(`HTTP ${res.status}`);
+      toast(t('Skins updated — reloading…')); setTimeout(() => window.location.reload(), 2000);
+    } catch (e) { logger.warn('updateSkins', e); toast(t('Skin update failed')); upd.disabled = false; upd.textContent = was; }
+  });
+  body.appendChild(upd);
 }
 // Firmware — ported from streamline.js: GET /machine/firmware gives a catalog +
 // the middleware's own update verdict; a bundled artifact is flashed via
@@ -1349,6 +1368,16 @@ function miscPanel(body) {
   // Keep scale on → reaprime scalePowerMode: 'disabled' keeps the scale powered,
   // 'displayOff' lets it sleep with the machine.
   toggleRow(1280, 706, 1420, 704, 'Keep scale on', (rea.scalePowerMode || 'disabled') === 'disabled', (v) => setRea('scalePowerMode', v ? 'disabled' : 'displayOff'));
+  // Dark mode — in the Tcl app the light/dark change meant switching skins; on
+  // decaid it's a setting, so expose it here. Same toggle style as "Keep scale on"
+  // (blue label, tapping the text flips it). Drives the skin's own theme: set the
+  // flag, flip document.documentElement.dataset.theme (what curTheme() reads), and
+  // broadcast insight-themechange so the pages + charts repaint immediately.
+  toggleRow(1280, 806, 1420, 804, 'Dark mode', curTheme() === 'dark', (v) => {
+    localStorage.setItem('theme', v ? 'dark' : 'light');
+    document.documentElement.dataset.theme = v ? 'dark' : 'light';
+    window.dispatchEvent(new Event('insight-themechange'));
+  });
   // Dim screen when battery low → reaprime lowBatteryBrightnessLimit (boolean).
   toggleRow(1740, 606, 1880, 584, 'Dim screen when battery low', !!rea.lowBatteryBrightnessLimit, (v) => setRea('lowBatteryBrightnessLimit', v), { width: 440 });
   // Smart charging → reaprime chargingMode + nightModeEnabled.
@@ -1469,12 +1498,22 @@ const actions = {
   extPicker: () => subPanel('Extensions', extPanel), misc: () => { appActionUrl('misc'); subPanel('Misc', miscPanel); },
   firmware: () => { machineActionUrl('firmware'); subPanel('Firmware', firmwarePanel); },
   appUpdate: () => {
-    // Show progress in the button itself (no toast): "Check for updates" -> "Updating…" -> result.
-    live.appUpdateLabel = t('Updating…'); host.update(live);
+    // "Update app" re-pulls every installed skin from its GitHub source (POST
+    // /webui/skins/update) — i.e. it also checks for skin updates — then RELOADS so
+    // a freshened skin (including the running one) actually loads, instead of only
+    // taking effect after a relaunch. Progress shows in the button label.
+    live.appUpdateLabel = t('Checking for updates…'); host.update(live);
     api.updateSkins()
-      .then((r) => { live.appUpdateLabel = r.ok ? t('Up to date') : t('Update failed'); })
-      .catch(() => { live.appUpdateLabel = t('Update failed'); })
-      .finally(() => { host.update(live); setTimeout(() => { live.appUpdateLabel = null; host.update(live); }, 3000); });
+      .then((r) => {
+        if (r && r.ok !== false) {
+          live.appUpdateLabel = t('Updated — reloading…'); host.update(live);
+          setTimeout(() => window.location.reload(), 2000);
+        } else { throw new Error(`HTTP ${r && r.status}`); }
+      })
+      .catch(() => {
+        live.appUpdateLabel = t('Update failed'); host.update(live);
+        setTimeout(() => { live.appUpdateLabel = null; host.update(live); }, 3000);
+      });
   },
   cancel: () => { clearTimeout(advSaveT); cleanup(); closeOverlay(); opened = false; if (hooks.onClose) hooks.onClose(); },
   // Ok: flush the in-progress profile edit to the workflow, then close and tell

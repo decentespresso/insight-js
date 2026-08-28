@@ -32,12 +32,21 @@ const resetBuf = () => { for (const k in buf) buf[k] = []; };
 const runBuf = { t: [], temp: [], w: [], p: [], f: [] };   // steam/water run: time, temp, weight, pressure, flow
 const resetRunBuf = () => { runBuf.t = []; runBuf.temp = []; runBuf.w = []; runBuf.p = []; runBuf.f = []; };
 let runStart = null;
+// Chart-time origin for the steam/water run graph: like the espresso chart, the
+// graph only plots while output is actually flowing (substate pouring), and its
+// x-axis starts at 0 on the first flowing sample — not when the machine entered
+// the steam/hotWater state (which brackets the pour with heat-up + purge).
+let runChartStart = null;
 
 // profile preview curve (target pressure/flow/temp step lines from profile steps)
 let preview = { t: [], p: [], f: [], T: [] };
 let currentSteps = [];                          // loaded profile steps (for the "Current step" label)
 // pour-phase tracking (preinfusion vs pouring split, like Insight)
 let poured = false, preinfEnd = 0, lastVolT = null, doneStart = null, doneTimer = null;
+// DE1 substates during which water reaches the puck — the only ones the espresso
+// chart plots. preparingForShot (pre-pour heater/stabilise) and pouringDone /
+// cleaning* (post-pour cleanout) are excluded so the chart covers just the pour.
+const CHART_SUBSTATES = new Set(['preinfusion', 'pouring']);
 
 // Determine profile type text (Insight: Pressure / Flow / Advanced profile).
 function profileTypeText(steps) {
@@ -359,33 +368,52 @@ function onSnapshot(d) {
   if (st !== machineState) { onStateChange(machineState, st); machineState = st; }
 
   if (st === 'espresso') {
-    const now = performance.now();
-    live.elapsed = shotStart ? (now - shotStart) / 1000 : 0;
-    const dv = lastVolT != null ? (d.flow || 0) * ((now - lastVolT) / 1000) : 0;
-    lastVolT = now;
-    live.totalVolume += dv;
-    // preinfusion until the shot builds pressure (exit condition), then pouring
-    if (!poured) {
-      live.preinfVolume += dv; live.preinfElapsed = live.elapsed;
-      if (d.pressure >= 4) { poured = true; preinfEnd = live.elapsed; }
-    } else {
-      live.pourVolumeOnly += dv; live.pourElapsed = live.elapsed - preinfEnd;
+    // Chart ONLY while water is actually reaching the puck: the DE1 espresso state
+    // brackets the pour with a pre-pour heater/stabilise phase (substate
+    // preparingForShot) and a post-pour cleanout (pouringDone / cleaning*), during
+    // which nothing should be plotted. Gate the whole shot buffer on the substate so
+    // the chart window is exactly [preinfusion .. pouring]. The time origin is the
+    // first water-to-puck sample, so both the chart x-axis and the "Time" readout
+    // start at 0 when pouring begins, not when the machine entered the espresso state.
+    if (CHART_SUBSTATES.has(live.substate)) {
+      const now = performance.now();
+      if (shotStart == null) shotStart = now;         // origin = first water to the puck
+      live.elapsed = (now - shotStart) / 1000;
+      const dv = lastVolT != null ? (d.flow || 0) * ((now - lastVolT) / 1000) : 0;
+      lastVolT = now;
+      live.totalVolume += dv;
+      // Split preinfusion vs pouring on the real substate (was a pressure>=4 guess).
+      if (live.substate === 'preinfusion') {
+        live.preinfVolume += dv; live.preinfElapsed = live.elapsed; preinfEnd = live.elapsed;
+      } else {
+        if (!poured) { poured = true; }               // preinfEnd already holds the handoff time
+        live.pourVolumeOnly += dv; live.pourElapsed = live.elapsed - preinfEnd;
+      }
+      buf.t.push(live.elapsed); buf.p.push(d.pressure); buf.pg.push(d.targetPressure);
+      buf.f.push(d.flow); buf.fg.push(d.targetFlow); buf.w.push(curWeightFlow);
+      buf.T.push(d.mixTemperature); buf.Tg.push(d.targetMixTemperature);
+      // puck resistance = pressure / flow^2 (laminar), like Insight's resistance curve
+      buf.r.push(d.flow > 0.2 ? +(d.pressure / (d.flow * d.flow)).toFixed(2) : null);
+      if (activeChart) activeChart.render(buf);
     }
-    buf.t.push(live.elapsed); buf.p.push(d.pressure); buf.pg.push(d.targetPressure);
-    buf.f.push(d.flow); buf.fg.push(d.targetFlow); buf.w.push(curWeightFlow);
-    buf.T.push(d.mixTemperature); buf.Tg.push(d.targetMixTemperature);
-    // puck resistance = pressure / flow^2 (laminar), like Insight's resistance curve
-    buf.r.push(d.flow > 0.2 ? +(d.pressure / (d.flow * d.flow)).toFixed(2) : null);
-    if (activeChart) activeChart.render(buf);
+    // Any other espresso substate (preparingForShot before the pour, pouringDone /
+    // cleaning* after it): leave the chart + stats frozen — no sample is charted.
   } else if (st === 'steam' || st === 'hotWater') {
-    // feed the running-page mini graph (steam temperature, or water temp+weight)
-    const el = runStart ? (performance.now() - runStart) / 1000 : 0;
-    runBuf.t.push(el); live.runElapsed = el;
-    runBuf.temp.push(st === 'steam' ? d.steamTemperature : d.mixTemperature);
-    runBuf.w.push(curWeight);
-    runBuf.p.push(d.pressure); runBuf.f.push(d.flow);
-    const mini = host.graphs[st === 'steam' ? 'steam_mini' : 'water_mini'];
-    if (mini) mini.render(runBuf);
+    live.runElapsed = runStart ? (performance.now() - runStart) / 1000 : 0;   // run-page timer (whole state)
+    // Feed the running-page mini graph ONLY while output is flowing — same rule as
+    // the espresso chart. The steam/hotWater state brackets the actual output with a
+    // pre-output heat-up and a post-output purge; charting those drew a flat/again-
+    // moving line before and after the pour. Gate on the flowing substate and start
+    // the chart clock at the first flowing sample so its x-axis begins at 0.
+    if (CHART_SUBSTATES.has(live.substate)) {
+      if (runChartStart == null) runChartStart = performance.now();
+      runBuf.t.push((performance.now() - runChartStart) / 1000);
+      runBuf.temp.push(st === 'steam' ? d.steamTemperature : d.mixTemperature);
+      runBuf.w.push(curWeight);
+      runBuf.p.push(d.pressure); runBuf.f.push(d.flow);
+      const mini = host.graphs[st === 'steam' ? 'steam_mini' : 'water_mini'];
+      if (mini) mini.render(runBuf);
+    }
   } else if (st === 'flush') {
     live.runElapsed = runStart ? (performance.now() - runStart) / 1000 : 0;   // flush stats (no chart)
   }
@@ -416,8 +444,8 @@ function onStateChange(prev, next) {
   const runFam = stateToFamily[next], prevFam = stateToFamily[prev];
   if (runFam) {
     currentFamily = runFam; live.family = runFam;
-    if (next === 'espresso') { shotStart = performance.now(); resetShotStats(); resetBuf(); }
-    if (next === 'steam' || next === 'hotWater' || next === 'flush') { runStart = performance.now(); resetRunBuf(); }
+    if (next === 'espresso') { shotStart = null; resetShotStats(); resetBuf(); }  // origin set on first pour sample
+    if (next === 'steam' || next === 'hotWater' || next === 'flush') { runStart = performance.now(); runChartStart = null; resetRunBuf(); }
     showPage(families[runFam].run);
   } else if (prevFam && (next === 'idle' || next === 'ready')) {
     // Espresso ends on a shot-summary "done" page. Steam ends on steam_3, which keeps

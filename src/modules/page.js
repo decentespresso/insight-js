@@ -174,6 +174,16 @@ export class PageHost {
       if (el.kind === 'slider' && el.valueBind) {
         try { const a = el.adj; let f = (el.valueBind(this.live) - a.min) / (a.max - a.min);
           f = Math.min(1, Math.max(0, f)); el._handle.style.left = (f * (el._trackW - el._hw)) + 'px'; } catch (e) { /* ignore */ }
+        // Theme-aware colours: the configured trough/handle are the light lavender
+        // set, which are far too bright over the dark page. Swap to muted dark tones
+        // in dark mode; restore the configured light colours otherwise.
+        const dk = curTheme() === 'dark';
+        // Dark: deep gutter (#16171b) with the touchable handle a lighter grey
+        // (#7e8387) — matched to the baked power/settings buttons so the control sits
+        // in the dark scheme instead of glowing. Same for all three flow sliders.
+        node.style.background = dk ? '#16171b' : (el.trough || '#cfd4e6');
+        el._handle.style.background = dk ? '#7e8387' : (el.fill || '#ffffff');
+        el._handle.style.boxShadow = dk ? '0 2px 8px rgba(0,0,0,0.5)' : '0 2px 10px rgba(0,0,0,0.18)';
       }
     }
   }

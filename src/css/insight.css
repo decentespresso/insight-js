@@ -49,7 +49,13 @@ html, body { margin: 0; background: #000; color: var(--ins-ink); overflow: hidde
   position: absolute; left: 0; top: 0; width: 2560px; height: 1600px;
   transform-origin: top left;               /* scaled via JS: scale(stageWidth/2560) */
   background-repeat: no-repeat; background-position: 0 0; background-size: 2560px 1600px;
+  /* Neutral fill under the background image: during a tab switch the AVIF swap
+     leaves a brief transparent gap; without this the #000 of #stage shows through
+     as a black flash (worst in light mode). A light lavender-grey (dark navy in
+     dark mode) makes any residual blink neutral instead of black. */
+  background-color: #e9eaf0;
 }
+:root[data-theme="dark"] #page { background-color: #1b1d29; }
 .tapzone { position: absolute; cursor: pointer; background: transparent; }
 .tapzone-debug { background: rgba(255,0,0,.15); outline: 1px solid rgba(255,0,0,.4); }
 .ovar { position: absolute; white-space: pre; line-height: 1.05; pointer-events: none; }
