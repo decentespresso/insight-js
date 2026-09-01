@@ -10,6 +10,13 @@
 // interval is the faithful 10 minutes (Tcl screen_saver_change_interval 10) so
 // the setting reads accurately when it's exposed to end users.
 import { logger } from '../modules/logger.js';
+import { setBrightness, getDisplayState } from '../modules/api.js';
+
+// The screen dims to this while the saver shows, restoring the prior brightness
+// on wake. Set in Settings › Misc › Screen saver › Brightness.
+const DEFAULT_SAVER_BRIGHTNESS = 40;
+const saverBrightness = () => { const v = parseInt(localStorage.getItem('insight_saver_brightness'), 10); return Number.isFinite(v) ? v : DEFAULT_SAVER_BRIGHTNESS; };
+let savedBrightness = null;   // app brightness captured at saver-open, restored on close
 
 const BASE = 'assets/saver/';
 // All Insight saver images except the plain black one (that's the "black saver"
@@ -88,7 +95,15 @@ export function openSaver(onWake) {
   document.getElementById('stage').appendChild(el);
 
   imgTimer = setInterval(nextImage, intervalMs());
-  logger.info(`saver open (${IMAGES.length} images, ${intervalMs() / 1000}s, clock ${clockEnabled() ? 'on' : 'off'})`);
+
+  // Dim the screen to the saver brightness, remembering the current level so we
+  // can restore it on wake. Capture the live value first (fire-and-forget).
+  const target = saverBrightness();
+  getDisplayState()
+    .then((d) => { savedBrightness = (typeof d?.brightness === 'number') ? d.brightness : 100; setBrightness(target).catch(() => {}); })
+    .catch(() => { if (savedBrightness == null) savedBrightness = 100; setBrightness(target).catch(() => {}); });
+
+  logger.info(`saver open (${IMAGES.length} images, ${intervalMs() / 1000}s, clock ${clockEnabled() ? 'on' : 'off'}, dim ${target}%)`);
 }
 
 export function closeSaver() {
@@ -96,5 +111,7 @@ export function closeSaver() {
   clearInterval(imgTimer); clearInterval(clockTimer);
   imgTimer = clockTimer = null;
   el.remove(); el = null; layers = null;
+  // Restore the brightness the screen had before the saver dimmed it.
+  if (savedBrightness != null) { setBrightness(savedBrightness).catch(() => {}); savedBrightness = null; }
   logger.info('saver closed');
 }

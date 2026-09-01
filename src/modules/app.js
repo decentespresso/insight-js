@@ -108,6 +108,10 @@ const steamDesiredTemp = () => { const v = parseFloat(localStorage.getItem(STEAM
 
 let currentFamily = 'espresso', machineState = 'idle';
 let shotStart = null, curWeight = 0, curWeightFlow = 0, saveT = null, activeChart = null;
+// The full-screen steam chart (opened from the small steam graph). Held here so the
+// live run loop keeps feeding it while it's open — otherwise it froze at the values
+// captured when it was opened. Null when the modal is closed.
+let steamZoomChart = null;
 // temperature-zoom Y-scale levels (tap top half to zoom in, bottom to zoom out)
 const TEMP_RANGES = [[78, 92], [84, 92], [87, 91]];
 let tempLevel = 0;
@@ -273,10 +277,13 @@ const actions = {
     box.style.transform = pageEl ? getComputedStyle(pageEl).transform : 'none';
     const chartEl = document.createElement('div');
     chartEl.style.cssText = 'position:absolute;left:30px;top:210px;width:2500px;height:1200px;';
-    box.appendChild(chartEl); box.addEventListener('click', closeModal);
+    box.appendChild(chartEl);
+    box.addEventListener('click', () => { steamZoomChart = null; closeModal(); });
     openModal(box);
     const big = new MiniChart(chartEl, { series: steamSeries(), title: '' });
+    if (big.setTheme) big.setTheme(curTheme());   // adapt plot bg/grid for Insight Dark
     big.render(runBuf);
+    steamZoomChart = big;                          // keep feeding it live while it's open
     requestAnimationFrame(() => big.resize());
   },
   toggleSteam: () => {
@@ -391,7 +398,19 @@ function onSnapshot(d) {
       }
       buf.t.push(live.elapsed); buf.p.push(d.pressure); buf.pg.push(d.targetPressure);
       buf.f.push(d.flow); buf.fg.push(d.targetFlow); buf.w.push(curWeightFlow);
-      buf.T.push(d.mixTemperature); buf.Tg.push(d.targetMixTemperature);
+      // Solid dark-red line = the temperature at the puck. On the DE1 that is the
+      // BASKET / head sensor, i.e. reaprime `groupTemperature` — NOT
+      // `mixTemperature`, which is only the water on its way to the puck. (de1app's
+      // Insight maps espresso_temperature_basket ← head_temperature ← groupTemperature,
+      // and espresso_temperature_mix ← mixTemperature.)
+      // Dotted line = the PROFILE's target temperature for the current frame — a
+      // stepped line that follows the loaded profile (93→95→88…). We do NOT use
+      // targetGroupTemperature: the DE1 reports it flat at the first frame's temp for
+      // the whole shot, so it never matches the profile ("it is showing the goal").
+      // Fall back to the reported goal if the frame or profile step is unknown.
+      const frameTemp = (fr != null && currentSteps[fr] && currentSteps[fr].temperature != null)
+        ? currentSteps[fr].temperature : d.targetGroupTemperature;
+      buf.T.push(d.groupTemperature); buf.Tg.push(frameTemp);
       // puck resistance = pressure / flow^2 (laminar), like Insight's resistance curve
       buf.r.push(d.flow > 0.2 ? +(d.pressure / (d.flow * d.flow)).toFixed(2) : null);
       if (activeChart) activeChart.render(buf);
@@ -413,6 +432,7 @@ function onSnapshot(d) {
       runBuf.p.push(d.pressure); runBuf.f.push(d.flow);
       const mini = host.graphs[st === 'steam' ? 'steam_mini' : 'water_mini'];
       if (mini) mini.render(runBuf);
+      if (steamZoomChart) steamZoomChart.render(runBuf);   // keep the full-screen steam chart live too
     }
   } else if (st === 'flush') {
     live.runElapsed = runStart ? (performance.now() - runStart) / 1000 : 0;   // flush stats (no chart)

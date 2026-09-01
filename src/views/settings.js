@@ -1264,11 +1264,61 @@ async function extPanel(body) {
     const col = spEl('div'); col.appendChild(spEl('div', 's2-sp-name', pl.name || pl.id));
     col.appendChild(spEl('div', 's2-sp-sub', pl.author || pl.id)); row.appendChild(col);
     const on = pl.enabled !== false;
-    const t = spEl('button', 's2-sp-btn' + (on ? '' : ' grey'), on ? 'Enabled' : 'Disabled'); t.style.marginLeft = 'auto';
-    t.addEventListener('click', () => { const fn = t.textContent === 'Enabled' ? api.disablePlugin : api.enablePlugin;
-      fn(pl.id).then(() => { const nowOn = t.textContent !== 'Enabled'; t.textContent = nowOn ? 'Enabled' : 'Disabled'; t.classList.toggle('grey', !nowOn); toast('Saved'); }).catch(() => toast('Failed')); });
-    row.appendChild(t); body.appendChild(row);
+    // Buttons live in a right-aligned group so an enabled plugin with a settings
+    // schema shows [Settings] [Enabled]; others just show the enable toggle.
+    const btns = spEl('div'); btns.style.cssText = 'margin-left:auto;display:flex;gap:24px;align-items:center;';
+    const hasSettings = pl.settings && typeof pl.settings === 'object' && Object.keys(pl.settings).length > 0;
+    if (on && hasSettings) {
+      const s = spEl('button', 's2-sp-btn grey', t('Settings'));
+      s.addEventListener('click', () => subPanel(pl.name || t('Settings'), (b) => pluginSettingsPanel(b, pl)));
+      btns.appendChild(s);
+    }
+    const tgl = spEl('button', 's2-sp-btn' + (on ? '' : ' grey'), on ? 'Enabled' : 'Disabled');
+    tgl.addEventListener('click', () => { const fn = tgl.textContent === 'Enabled' ? api.disablePlugin : api.enablePlugin;
+      fn(pl.id).then(() => { const nowOn = tgl.textContent !== 'Enabled'; tgl.textContent = nowOn ? 'Enabled' : 'Disabled'; tgl.classList.toggle('grey', !nowOn); toast('Saved'); }).catch(() => toast('Failed')); });
+    btns.appendChild(tgl);
+    row.appendChild(btns); body.appendChild(row);
   });
+}
+// Per-plugin settings form, opened from the Extensions panel. The manifest's
+// `settings` object is the schema (key -> {type, description, default}); the live
+// values come from GET /plugins/{id}/settings; each change POSTs a partial merge.
+async function pluginSettingsPanel(body, pl) {
+  if (pl.description) body.appendChild(spEl('div', 's2-sp-sub', pl.description));
+  const schema = pl.settings || {};
+  const cur = await api.getPluginSettings(pl.id).catch(() => ({}));
+  const draft = { ...cur };
+  const save = () => api.setPluginSettings(pl.id, draft).then(() => toast('Saved')).catch(() => toast('Failed'));
+  Object.keys(schema).forEach((key) => {
+    const def = schema[key] || {};
+    const row = spEl('div', 's2-sp-row');
+    const col = spEl('div'); col.appendChild(spEl('div', 's2-sp-name', key));
+    if (def.description) col.appendChild(spEl('div', 's2-sp-sub', def.description));
+    row.appendChild(col);
+    const val = (draft[key] !== undefined) ? draft[key] : def.default;
+    if (def.type === 'boolean') {
+      const b = spEl('button', 's2-sp-btn' + (val ? '' : ' grey'), val ? 'On' : 'Off'); b.style.marginLeft = 'auto';
+      b.addEventListener('click', () => { const nv = !(draft[key] !== undefined ? draft[key] : def.default); draft[key] = nv; b.textContent = nv ? 'On' : 'Off'; b.classList.toggle('grey', !nv); save(); });
+      row.appendChild(b);
+    } else if (def.type === 'number') {
+      const wrap = spEl('div'); wrap.style.cssText = 'margin-left:auto;display:flex;align-items:center;gap:24px;';
+      const num = spEl('div', 's2-sp-name', String(val ?? 0)); num.style.cssText = 'min-width:140px;text-align:center;';
+      const cur0 = () => +((draft[key] !== undefined ? draft[key] : def.default) ?? 0);
+      const setN = (nv) => { nv = Math.max(0, nv); draft[key] = nv; num.textContent = String(nv); save(); };
+      const dec = spEl('button', 's2-sp-btn grey', '−'); dec.addEventListener('click', () => setN(cur0() - 1));
+      const inc = spEl('button', 's2-sp-btn grey', '+'); inc.addEventListener('click', () => setN(cur0() + 1));
+      wrap.appendChild(dec); wrap.appendChild(num); wrap.appendChild(inc);
+      row.appendChild(wrap);
+    } else {
+      const inp = spEl('input'); inp.value = val ?? ''; inp.style.cssText = 'margin-left:auto;font-size:44px;padding:10px 20px;max-width:900px;';
+      inp.addEventListener('change', () => { draft[key] = inp.value; save(); });
+      row.appendChild(inp);
+    }
+    body.appendChild(row);
+  });
+  const back = spEl('button', 's2-sp-btn', t('Back')); back.style.marginTop = '40px';
+  back.addEventListener('click', () => subPanel('Extensions', extPanel));
+  body.appendChild(back);
 }
 function langPanel(body) {
   const cur = currentLangName();
@@ -1349,9 +1399,14 @@ function miscPanel(body) {
   txt(340, 500, t('Screen saver'), { size: 42, weight: 700 });
   txt(1040, 498, t('clock'), { size: 40, color: C.val, anchor: 'ne' });
   toggle(1060, 502, g('insight_saver_clock', '0') === '1', (v) => set('insight_saver_clock', v ? '1' : '0'));
-  let bval; const brightNow = () => Math.round(live.brightness ?? 100);
-  bval = txt(340, 664, `${t('Brightness')} ${brightNow()}%`, { size: 38 });
-  slider(340, 560, 800, 0, 100, brightNow(), (v) => { const n = Math.round(v); live.brightness = n; bval.textContent = `${t('Brightness')} ${n}%`; api.setBrightness(n).catch(() => {}); });
+  // Screen-saver brightness = the level the screen dims to WHILE the saver is
+  // showing (saver.js applies it on open and restores the prior brightness on
+  // wake). It is a saver preference, NOT the live app brightness — the App tab's
+  // own slider controls that. (Previously this drove api.setBrightness directly,
+  // so it changed app brightness instead of the saver's.)
+  let bval; const saverBrightNow = () => { const v = parseInt(localStorage.getItem('insight_saver_brightness'), 10); return Number.isFinite(v) ? v : 40; };
+  bval = txt(340, 664, `${t('Brightness')} ${saverBrightNow()}%`, { size: 38 });
+  slider(340, 560, 800, 0, 100, saverBrightNow(), (v) => { const n = Math.round(v); localStorage.setItem('insight_saver_brightness', String(n)); bval.textContent = `${t('Brightness')} ${n}%`; });
   let ival; const ivMin = () => Math.max(0, Math.round(gi('insight_saver_interval_sec', 600) / 60));
   ival = txt(340, 844, `${t('Change image every')}: ${ivMin()} ${t('minutes')}`, { size: 38 });
   slider(340, 740, 800, 0, 120, ivMin(), (v) => { const n = Math.round(v); set('insight_saver_interval_sec', n * 60); ival.textContent = `${t('Change image every')}: ${n} ${t('minutes')}`; });

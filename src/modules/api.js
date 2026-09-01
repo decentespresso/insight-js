@@ -37,6 +37,10 @@ export const connectDevice = (id) => fetch(`${API_BASE}/devices/connect?deviceId
 export const disconnectDevice = (id) => fetch(`${API_BASE}/devices/disconnect?deviceId=${encodeURIComponent(id)}`, { method: 'PUT' });
 export const getShotIds = () => j('GET', '/shots/ids');
 export const getPlugins = () => j('GET', '/plugins');
+// Per-plugin settings: GET returns the plugin's current values (keys per its
+// manifest `settings` schema); POST merges a partial and persists it.
+export const getPluginSettings = (id) => j('GET', `/plugins/${encodeURIComponent(id)}/settings`);
+export const setPluginSettings = (id, partial) => j('POST', `/plugins/${encodeURIComponent(id)}/settings`, partial);
 export const getPresence = () => j('GET', '/presence/settings');
 export const setPresence = (s) => j('POST', '/presence/settings', s);
 // Wake schedules (the keep-hot daily schedule). WakeSchedule = {id, time:"HH:MM",
