@@ -2,7 +2,7 @@
   "id": "insight",
   "name": "Insight",
   "description": "Faithful web port of the classic de1app Insight skin for Decent.app",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": "John Buckman / Decent Espresso",
   "repository": "https://github.com/decentespresso/insight-js"
 }
