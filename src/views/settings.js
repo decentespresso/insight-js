@@ -1268,6 +1268,17 @@ async function extPanel(body) {
     // schema shows [Settings] [Enabled]; others just show the enable toggle.
     const btns = spEl('div'); btns.style.cssText = 'margin-left:auto;display:flex;gap:24px;align-items:center;';
     const hasSettings = pl.settings && typeof pl.settings === 'object' && Object.keys(pl.settings).length > 0;
+    // A plugin can ship its own page by declaring an http endpoint named "ui"
+    // (Decaid serves it at /plugins/<id>/ui). Any enabled plugin that has one gets
+    // an Open button that shows that page in-skin — generic, so a new plugin needs
+    // no skin change (e.g. dcamp's "Open dcamp" page, or the shot uploader's list
+    // of recently uploaded shots with their links).
+    const hasUi = Array.isArray(pl.api) && pl.api.some((e) => e && e.type === 'http' && e.id === 'ui');
+    if (on && hasUi) {
+      const o = spEl('button', 's2-sp-btn', t('Open'));
+      o.addEventListener('click', () => openPluginUi(pl));
+      btns.appendChild(o);
+    }
     if (on && hasSettings) {
       const s = spEl('button', 's2-sp-btn grey', t('Settings'));
       s.addEventListener('click', () => subPanel(pl.name || t('Settings'), (b) => pluginSettingsPanel(b, pl)));
@@ -1279,6 +1290,24 @@ async function extPanel(body) {
     btns.appendChild(tgl);
     row.appendChild(btns); body.appendChild(row);
   });
+}
+// Open a plugin's own `ui` page full-screen (a Back bar over an iframe of
+// /plugins/<id>/ui). This is the generic surface: the skin doesn't need to know
+// anything about the plugin — it just embeds the page the plugin serves.
+function openPluginUi(pl) {
+  const panel = spEl('div');
+  panel.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;background:#fff;';
+  const bar = spEl('div');
+  bar.style.cssText = 'flex:0 0 auto;display:flex;align-items:center;gap:32px;padding:36px 44px;';
+  const back = spEl('button', 's2-sp-btn grey', '‹ ' + t('Back'));
+  back.addEventListener('click', closeOverlay);
+  bar.appendChild(back);
+  bar.appendChild(spEl('div', 's2-sp-name', pl.name || pl.id));
+  const frame = spEl('iframe');
+  frame.src = `${api.API_BASE}/plugins/${encodeURIComponent(pl.id)}/ui`;
+  frame.style.cssText = 'flex:1 1 auto;width:100%;border:0;';
+  panel.appendChild(bar); panel.appendChild(frame);
+  openOverlay(panel);
 }
 // Per-plugin settings form, opened from the Extensions panel. The manifest's
 // `settings` object is the schema (key -> {type, description, default}); the live
