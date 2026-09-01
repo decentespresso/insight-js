@@ -11,6 +11,7 @@ import { openSettings, isSettingsOpen, settingsGoto, closeSettings, settingsShow
 import { openProfileEditor } from '../views/profile_editor.js';
 import { openNumpad } from '../views/numpad.js';
 import { openSaver, closeSaver, isSaverOpen } from '../views/saver.js';
+import { openNoAc, closeNoAc, isNoAcOpen } from '../views/no_ac.js';
 import { openModal, closeModal } from './overlay.js';
 import { initI18n, t, tempSym } from './i18n.js';
 
@@ -112,6 +113,9 @@ let shotStart = null, curWeight = 0, curWeightFlow = 0, saveT = null, activeChar
 // live run loop keeps feeding it while it's open — otherwise it froze at the values
 // captured when it was opened. Null when the modal is closed.
 let steamZoomChart = null;
+// The no-AC (front standby switch) page is dismissed by a tap; it stays dismissed
+// until the switch state actually changes (substate leaves errorNoAC).
+let noAcDismissed = false;
 // temperature-zoom Y-scale levels (tap top half to zoom in, bottom to zoom out)
 const TEMP_RANGES = [[78, 92], [84, 92], [87, 91]];
 let tempLevel = 0;
@@ -377,6 +381,18 @@ function onSnapshot(d) {
   // "Current step" = frame index (1-based) + the step's name, from the loaded profile
   const fr = (typeof d.profileFrame === 'number') ? d.profileFrame : null;
   live.currentStep = (fr != null && currentSteps[fr]) ? `${fr + 1}: ${currentSteps[fr].name || currentSteps[fr].pump || ''}` : (fr != null ? `${fr + 1}` : '');
+
+  // Front standby switch cutting AC (idle + Error_NoAC): show the dedicated "push
+  // the switch on" page instead of rendering it as an error. Driven off the
+  // substate (state stays 'idle', so onStateChange doesn't fire). A tap dismisses
+  // it until the switch state changes, so we don't redraw over the user.
+  const noAc = st === 'idle' && live.substate === 'errorNoAC';
+  if (noAc) {
+    if (!noAcDismissed && !isNoAcOpen()) openNoAc(() => { noAcDismissed = true; });
+  } else {
+    if (isNoAcOpen()) closeNoAc();
+    noAcDismissed = false;
+  }
 
   if (st !== machineState) { onStateChange(machineState, st); machineState = st; }
 

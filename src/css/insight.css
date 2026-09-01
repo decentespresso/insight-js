@@ -154,6 +154,12 @@ html, body { margin: 0; background: #000; color: var(--ins-ink); overflow: hidde
   font-size: 3.4vw; color: #f8f8f8; pointer-events: none; white-space: nowrap;
   text-shadow: 2px 2px 0 #444, -2px -2px 0 #ccc; transition: left .8s ease, top .8s ease; }
 
+/* Front-standby-switch (no-AC) page label, over the front-button photo. */
+.no-ac-label { position: absolute; left: 50%; top: 39%; transform: translate(-50%, -50%);
+  font-family: 'InsightUI', Helvetica, Arial, sans-serif; font-weight: bold; font-size: 4vw;
+  color: #ffffff; text-align: center; white-space: nowrap; pointer-events: none;
+  text-shadow: 0 3px 14px rgba(0, 0, 0, 0.75); }
+
 /* ---- Maintenance layer (descale-prep / descaling / cleaning) ---- */
 /* Its own top-level layer so it can stack above the Settings overlay. Reuses the
    .s2page canvas (2560x1600, CSS-scaled). */
