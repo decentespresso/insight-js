@@ -22,6 +22,10 @@ const COL = {
   pressure: '#00b672', flow: '#6c9bff', temp: '#ff7880', weight: '#a2693d',
   grid: '#e6e6e6', bg: '#ffffff',
 };
+// Solid dark fill for charts that must stay OPAQUE in dark mode (e.g. the
+// full-screen zoomed steam chart, which must cover the skin behind it) rather
+// than the usual transparent dark-mode fill that lets a dark card show through.
+const DARK_CARD = '#1b1d29';
 // Same typeface the Tcl Insight skin uses (Noto Sans UI, embedded via @font-face).
 const FONT = "'InsightUI', Helvetica, Arial, sans-serif";
 
@@ -125,13 +129,16 @@ export class EspressoChart {
 export class MiniChart {
   constructor(el, opts = {}) {
     this.el = el; this.series = opts.series || [{ key: 'temp', color: COL.temp }];
+    // Opaque instances (the zoomed steam chart) keep a solid paper+plot fill in
+    // both themes so nothing shows through; the small card charts stay transparent.
+    this.solidBg = !!opts.solidBg;
     // A series may opt onto a right-hand secondary axis (axis:'y2') — used so the
     // steam chart can show temperature (~150°C) alongside pressure/flow (0-3) without
     // one squashing the other.
     const hasY2 = this.series.some((s) => s.axis === 'y2');
     this.traces = this.series.map((s) => trace(s.color, 'x', s.axis === 'y2' ? 'y2' : 'y', null, 7));
     this.layout = { margin: { l: 64, r: hasY2 ? 64 : 18, t: 20, b: 30 }, showlegend: false,
-      paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: COL.bg,
+      paper_bgcolor: opts.solidBg ? COL.bg : 'rgba(0,0,0,0)', plot_bgcolor: COL.bg,
       xaxis: { gridcolor: COL.grid, gridwidth: 2, zeroline: false, fixedrange: true, showline: false,
         ticks: '', showticklabels: false, rangemode: 'tozero', autorange: true },
       yaxis: { gridcolor: COL.grid, gridwidth: 2, zeroline: false, fixedrange: true, showline: false,
@@ -165,9 +172,12 @@ function applyChartTheme(chart, theme, axes) {
   // the dark card image behind the chart shows through and the chart reads as
   // borderless — a solid fill here (was #1b1d29) never matches the tile exactly and
   // shows as a mismatched rectangle. Light mode keeps its light fill (matches fine).
-  const bg = dark ? 'rgba(0,0,0,0)' : COL.bg, grid = dark ? '#3a3d4a' : COL.grid;
+  // Opaque charts stay solid in dark mode (solid dark card); transparent charts
+  // let the dark tile behind them show through.
+  const bg = dark ? (chart.solidBg ? DARK_CARD : 'rgba(0,0,0,0)') : COL.bg, grid = dark ? '#3a3d4a' : COL.grid;
   chart.layout.plot_bgcolor = bg;
   const relayout = { plot_bgcolor: bg };
+  if (chart.solidBg) { chart.layout.paper_bgcolor = bg; relayout.paper_bgcolor = bg; }
   axes.forEach((a) => { if (chart.layout[a]) { chart.layout[a].gridcolor = grid; relayout[a + '.gridcolor'] = grid; } });
   try { Plotly.relayout(chart.el, relayout); } catch (e) { /* ignore */ }
 }

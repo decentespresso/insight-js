@@ -268,11 +268,16 @@ const actions = {
   // white cards to hide them (per John's #eeeefa request).
   zoomSteam: () => {
     const pageEl = document.getElementById('page');
-    const dark = curTheme() === 'dark' && config.darkImages && config.darkImages.has('steam_3');
-    const bgUrl = (dark ? config.darkBase : config.imgBase) + 'steam_3.avif';
+    const isDark = curTheme() === 'dark';
+    // The overlay must be OPAQUE — no skin showing through. Light mode keeps the
+    // steam-done skin background (John's #eeeefa request); dark mode uses a solid
+    // dark fill (the dark steam image would show the jug/dial/cup through the chart).
+    const bg = isDark
+      ? '#1b1d29'
+      : `#eeeefa url("${config.imgBase}steam_3.avif") top left/2560px 1600px no-repeat`;
     const box = document.createElement('div');
     box.style.cssText = 'position:absolute;left:0;top:0;width:2560px;height:1600px;transform-origin:top left;'
-      + `background:#eeeefa url("${bgUrl}") top left/2560px 1600px no-repeat;cursor:pointer;`;
+      + `background:${bg};cursor:pointer;`;
     // Mirror #page's live scale/position exactly (works regardless of viewport size).
     box.style.transform = pageEl ? getComputedStyle(pageEl).transform : 'none';
     const chartEl = document.createElement('div');
@@ -280,8 +285,9 @@ const actions = {
     box.appendChild(chartEl);
     box.addEventListener('click', () => { steamZoomChart = null; closeModal(); });
     openModal(box);
-    const big = new MiniChart(chartEl, { series: steamSeries(), title: '' });
-    if (big.setTheme) big.setTheme(curTheme());   // adapt plot bg/grid for Insight Dark
+    // solidBg: keep the chart itself opaque so the background never shows through it.
+    const big = new MiniChart(chartEl, { series: steamSeries(), title: '', solidBg: true });
+    if (big.setTheme) big.setTheme(curTheme());   // adapt grid + solid fill for Insight Dark
     big.render(runBuf);
     steamZoomChart = big;                          // keep feeding it live while it's open
     requestAnimationFrame(() => big.resize());
