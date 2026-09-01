@@ -912,6 +912,60 @@ function clearAppActionUrl() { if (hooks.onAppAction) hooks.onAppAction(null); }
 export function settingsAppAction(name) { const fn = actions[name]; if (fn) fn(); }
 const spEl = (tag, cls, txt) => { const n = document.createElement(tag); if (cls) n.className = cls; if (txt != null) n.textContent = txt; return n; };
 
+// Poll the webui server until it is serving again after a restart, returning the
+// (new) port. Decaid binds a fresh port each restart, so we can't assume the old
+// one — status tells us the current one. Times out (returns null) after ~20s.
+async function waitForSkinServer(timeoutMs = 20000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 500));
+    try { const st = await api.getWebuiServerStatus(); if (st && st.serving && st.port) return st.port; } catch (e) { /* server still down */ }
+  }
+  return null;
+}
+
+// Switch to another skin. decaid keeps serving the CURRENT skin's folder until the
+// webui server is restarted, and rebinds a FRESH PORT each time it serves — so
+// setDefaultSkin + a plain page reload just reloads the old skin on a soon-dead
+// port. Mirror Streamline's working sequence: set default, confirm it took,
+// stop+start the server, wait for the new port, then navigate to the stable :3000
+// redirector (decaid keeps :3000 bound as a 307 to whatever port serves the skin).
+async function switchSkin(s) {
+  const label = s.name || s.id;
+  try {
+    // In-app (served by decaid's webui) vs a dev static server (:5173): the server
+    // restart + :3000 redirector only exist in-app, and switching skins from a
+    // static server is meaningless (it only serves this skin). Detect by matching
+    // our page port to the current serving port.
+    let status = null;
+    try { status = await api.getWebuiServerStatus(); } catch (e) { /* ignore */ }
+    const port = window.location.port;
+    const inApp = port === '3000' || (status && status.port && String(status.port) === port);
+
+    await api.setDefaultSkin(s.id);
+    const active = await api.getDefaultSkin().catch(() => null);
+    if (active && active.id && active.id !== s.id) { toast('Set skin failed'); return; }
+
+    if (!inApp) { toast(`Skin set to ${label} (applies in-app)`); return; }
+
+    toast(`Switching to ${label}…`);
+    await api.stopWebuiServer().catch(() => {});
+    await api.startWebuiServer().catch(() => {});
+    const newPort = await waitForSkinServer();
+    if (!newPort) { toast('Skin set, but the web server did not come back — restart Decaid'); return; }
+
+    toast(`Loading ${label}…`);
+    // The webview only accepts the navigation once it has picked up the new port;
+    // too early and decaid treats it as an external link (opens system browser).
+    // Give it a beat, then one retry, then a fallback message.
+    await new Promise((r) => setTimeout(r, 1200));
+    const enter = () => window.location.assign(`${window.location.protocol}//${window.location.hostname}:3000/?_=${Date.now()}`);
+    enter();
+    setTimeout(enter, 3000);
+    setTimeout(() => toast('Skin set, but this screen did not switch — use system back, then open the skin'), 6000);
+  } catch (e) { logger.warn('switchSkin', e); toast('Set skin failed'); }
+}
+
 async function skinPanel(body) {
   body.appendChild(spEl('p', 's2-sp-sub', 'Loading skins from reaprime…'));
   const [skins, def] = await Promise.all([api.getSkins().catch(() => []), api.getDefaultSkin().catch(() => ({}))]);
@@ -922,14 +976,9 @@ async function skinPanel(body) {
     const col = spEl('div'); col.appendChild(spEl('div', 's2-sp-name', s.name || s.id));
     col.appendChild(spEl('div', 's2-sp-sub', `${s.id}  ·  v${s.version || '?'}${s.id === curId ? '  ·  current' : ''}`));
     row.appendChild(col);
-    // Switching skins: set the default, then RELOAD so the new skin actually loads.
-    // Mirror Streamline EXACTLY (its skin settings do the same and it works): set the
-    // default, then reload after ~2s. The delay matters — decaid re-serves the newly
-    // selected skin's folder after the default changes, and a too-early reload
-    // (we had 400ms) fetches the OLD skin before the re-serve lands.
-    row.addEventListener('click', () => api.setDefaultSkin(s.id)
-      .then(() => { toast(`Skin set to ${s.name || s.id} — reloading…`); setTimeout(() => window.location.reload(), 2000); })
-      .catch((e) => { logger.warn('setSkin', e); toast('Set skin failed'); }));
+    // Switching skins needs a webui-server restart, not a page reload — see
+    // switchSkin() below.
+    row.addEventListener('click', () => switchSkin(s));
     body.appendChild(row);
   });
   // "Check for current skin updates" — re-pull the installed skins from their GitHub

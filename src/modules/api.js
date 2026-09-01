@@ -70,6 +70,14 @@ export const getSkins = () => j('GET', '/webui/skins');                     // [
 export const getDefaultSkin = () => j('GET', '/webui/skins/default');
 export const setDefaultSkin = (skinId) => j('PUT', '/webui/skins/default', { skinId });
 export const updateSkins = () => fetch(`${API_BASE}/webui/skins/update`, { method: 'POST' }); // re-pull skins from source (self-update)
+// WebUI server control — needed to actually switch skins: decaid serves the
+// CURRENT skin's folder until the server is restarted, and it binds a FRESH PORT
+// each time it serves (webui_service.dart _serveFresh), so a plain page reload
+// after setDefaultSkin lands on the old, now-dead port. Stop+start, wait for the
+// new port via status, then navigate to the stable :3000 redirector.
+export const stopWebuiServer = () => j('POST', '/webui/server/stop');
+export const startWebuiServer = () => j('POST', '/webui/server/start');
+export const getWebuiServerStatus = () => j('GET', '/webui/server/status'); // {serving, path, port, ip}
 // Firmware — ported from streamline.js (GET catalog + apply/upload NDJSON flow).
 // Bundled firmware catalog + the middleware's own update verdict. Needs no machine
 // connection. Returns null on any failure — the check is informational.
