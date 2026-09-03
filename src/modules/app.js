@@ -243,10 +243,28 @@ window.addEventListener('insight-themechange', () => {
   if (live.pageState) showPage(live.pageState);
 });
 
-// Screensaver: sleep the machine and show the rotating-image saver; a tap wakes.
-// Opening is guarded (safe to call from both the sleep button and the state
-// snapshot, so an externally-triggered sleep also shows the saver).
-function wake() { api.setMachineState('idle').catch((e) => logger.warn('wake', e)); api.restoreDisplay(); }
+// Screensaver: the saver is a pure function of the machine's CONFIRMED state,
+// the way the Streamline skin learned to keep it after this exact bug. Two rules:
+//   - showSaver() only ever runs from onStateChange's confirmed `sleeping`
+//     transition. It is NEVER raised optimistically off the sleep button: doing
+//     so raced the button's `sleeping` PUT against a quick tap's `idle` PUT, and
+//     the machine could settle back asleep — so "coming out of the saver" left
+//     the DE1 asleep instead of idle.
+//   - wake() is the ONLY path that commands a wake, and it is bound to a tap on
+//     the saver (openSaver(wake) -> saver click). closeSaver() is pure paint.
+//
+// wakeRequestedAt marks a wake we've sent but the machine hasn't confirmed: its
+// snapshots still say `sleeping` for a frame or two, and this keeps those stale
+// frames from raising the saver back over the user who just tapped. Bounded, so a
+// lost or refused wake simply lets the saver return.
+let wakeRequestedAt = 0;
+const WAKE_CONFIRM_GRACE_MS = 5000;
+const isWakePending = () => wakeRequestedAt !== 0 && (Date.now() - wakeRequestedAt) < WAKE_CONFIRM_GRACE_MS;
+function wake() {
+  wakeRequestedAt = Date.now();
+  api.setMachineState('idle').catch((e) => { logger.warn('wake', e); wakeRequestedAt = 0; });
+  api.restoreDisplay();
+}
 function showSaver() { api.dimDisplay(); openSaver(wake); }
 
 const actions = {
@@ -259,7 +277,10 @@ const actions = {
   stopEspresso: () => api.setMachineState('idle'), stopSteam: () => api.setMachineState('idle'),
   stopWater: () => api.setMachineState('idle'), stopFlush: () => api.setMachineState('idle'),
   skipStep: () => api.setMachineState('skipStep').catch(() => {}),
-  sleep: () => { api.setMachineState('sleeping').catch((e) => logger.warn('sleep', e)); showSaver(); },
+  // Just ask the machine to sleep; the saver comes up when the machine CONFIRMS
+  // it (onStateChange) — never optimistically, or a quick tap-to-wake races the
+  // sleep and the DE1 can stay asleep.
+  sleep: () => { api.setMachineState('sleeping').catch((e) => logger.warn('sleep', e)); },
   settings: () => openSettings(settingsLastTab(), settingsHooks),
   editProfile: () => openProfileEditor(() => { loadWorkflow(); host.update(live); }),
   profileSelect: () => openProfileSelector((p) => { live.profileTitle = p.title; loadWorkflow(); host.update(live); }),
@@ -481,8 +502,11 @@ function startDoneTimer() {
 
 function onStateChange(prev, next) {
   logger.info(`machine ${prev} -> ${next}`);
-  if (next === 'sleeping') { showSaver(); return; }        // asleep => dim + screensaver
-  if (prev === 'sleeping') { api.restoreDisplay(); if (isSaverOpen()) closeSaver(); }  // woke => restore + dismiss
+  // Confirmed sleep => dim + screensaver. Skip it while a wake we just sent is
+  // still unconfirmed, so a stale `sleeping` frame can't raise the saver back
+  // over the user who tapped to wake.
+  if (next === 'sleeping') { if (isWakePending()) return; showSaver(); return; }
+  if (prev === 'sleeping') { wakeRequestedAt = 0; api.restoreDisplay(); if (isSaverOpen()) closeSaver(); }  // woke => restore + dismiss
   const runFam = stateToFamily[next], prevFam = stateToFamily[prev];
   if (runFam) {
     currentFamily = runFam; live.family = runFam;

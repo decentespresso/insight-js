@@ -91,7 +91,11 @@ export function openSaver(onWake) {
   if (clockEnabled()) { clock.style.display = 'block'; lastMinute = null; tickClock(clock); clockTimer = setInterval(() => tickClock(clock), 1000); }
   el.appendChild(clock);
 
-  el.addEventListener('click', () => { closeSaver(); if (onWake) onWake(); });
+  // Tap to wake. The hide is a paint; the wake is the command. Never let a paint
+  // failure swallow the wake — closing the saver must not be able to keep the
+  // machine asleep (this is exactly how a setBrightness().catch TypeError used to
+  // abort the wake). Hide first, but the wake runs no matter what.
+  el.addEventListener('click', () => { try { closeSaver(); } catch (e) { logger.warn('closeSaver', e); } if (onWake) onWake(); });
   document.getElementById('stage').appendChild(el);
 
   imgTimer = setInterval(nextImage, intervalMs());

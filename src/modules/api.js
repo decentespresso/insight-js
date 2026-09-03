@@ -161,11 +161,17 @@ export function connectDisplay() {
   displayWS.onerror = (e) => logger.error('display WS error', e);
   return displayWS;
 }
+// Always returns a Promise: brightness is fire-and-forget over the WS, but
+// callers chain `.catch()` (e.g. saver.js dim/restore). Returning undefined here
+// made `setBrightness(...).catch` throw a TypeError inside closeSaver(), which —
+// because the saver's tap handler runs `closeSaver(); onWake();` — aborted before
+// the wake ever fired, so tapping the screensaver never sent the machine to idle.
 function sendDisplay(cmd) {
   const ok = displayReady && displayWS && displayWS.readyState === WebSocket.OPEN;
-  if (ok) { try { displayWS.send(JSON.stringify(cmd)); } catch (e) { logger.warn('display send', e); } return; }
+  if (ok) { try { displayWS.send(JSON.stringify(cmd)); } catch (e) { logger.warn('display send', e); } return Promise.resolve(); }
   // first dim can race the socket opening — retry once shortly after
   setTimeout(() => { try { displayWS && displayWS.send(JSON.stringify(cmd)); } catch (e) { logger.warn('display send (retry)', e); } }, 200);
+  return Promise.resolve();
 }
 export const setBrightness = (n) => sendDisplay({ command: 'setBrightness', brightness: n });
 export const dimDisplay = () => setBrightness(10);
