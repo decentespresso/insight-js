@@ -6,6 +6,7 @@ import { t, fmtTemp, readableSubstate } from '../modules/i18n.js';
 const IMG = 'assets/insight/';
 const F = { data: 44, label: 34, button: 80, sub: 42, prof: 40, step: 30 };
 const C = { data: '#42465c', lighter: '#969eb1', dark: '#5a5d75', button: '#2d3046' };
+const LINK = '#4e85f4';   // tappable [tare] / [edit] labels
 
 const ALL = ['off', 'espresso', 'espresso_3'];
 const OFFISH = ['off', 'espresso_3'];
@@ -50,6 +51,10 @@ export const espressoConfig = {
     { kind: 'button', pages: OFFISH, rect: [2040, 1072, 2400, 1180], action: 'profileSelect' },
     { kind: 'button', pages: OFFISH, rect: [2040, 720, 2560, 1070], action: 'editProfile' },
     { kind: 'button', pages: ERUN, rect: [2020, 1204, 2560, 1600], action: 'skipStep' },
+    // ---- Weight card (ready/idle): [tare] on the Weight row, [edit] on the Stop row ----
+    { kind: 'button', pages: CARDOFF, rect: [2040, cy(12), 2560, cy(14) - 1], action: 'tare' },
+    { kind: 'button', pages: CARDOFF, rect: [2040, cy(14), 2560, cy(16)], action: 'numpad',
+      np: { title: 'Stop at weight', key: 'targetWeight', min: 1, max: 2000, step: 0.1, bigStep: 1, decimals: 1, set: (v) => ({ profile: { target_weight: v }, context: { targetYield: v } }) } },
 
     // ---- graph (3 stacked panels) ----
     { kind: 'graph', id: 'espresso_chart', pages: ALL, rect: [20, 267, 2010, 1584] },
@@ -97,6 +102,16 @@ export const espressoConfig = {
     row(CARDOFF, 2060, 1080, 'nw', C.dark, (l) => t(l.profileType || 'Profile'), { weight: 'bold' }),
     row(CARDOFF, 2060, 1118, 'nw', C.lighter, (l) => wrap(l.profileTitle, 29, 0)),
     row(CARDOFF, 2060, 1156, 'nw', C.lighter, (l) => wrap(l.profileTitle, 29, 1)),
+
+    // ---- Weight (ready/idle): "Weight" + [tare], live "Current:", "Stop at:" + [edit] ----
+    // Shown only with a scale present (incl. the Bengle's integrated scale). Tap
+    // [tare] to tare, the Stop-at row to edit the stop-at-weight (numpad). Mirrors
+    // the Tcl Insight card (bengle.tcl / de1_skin_settings.tcl).
+    row(CARDOFF, 2060, cy(12.5), 'nw', C.dark, (l) => (l.scaleConnected ? t('Weight') : ''), { weight: 'bold' }),
+    row(CARDOFF, 2512, cy(12.5), 'ne', LINK, (l) => (l.scaleConnected ? `[${t('tare')}]` : '')),
+    row(CARDOFF, 2060, cy(13.5), 'nw', C.lighter, (l) => (l.scaleConnected ? `${t('Current')}: ${n1(l.weight)}g` : '')),
+    row(CARDOFF, 2060, cy(14.5), 'nw', C.lighter, (l) => (l.scaleConnected ? `${t('Stop at')}: ${l.targetWeight > 0 ? `${n1(l.targetWeight)}g` : t('off')}` : '')),
+    row(CARDOFF, 2512, cy(14.5), 'ne', LINK, (l) => (l.scaleConnected ? `[${t('edit')}]` : '')),
 
     // ---- RUNNING card (espresso): Temperature goal/coffee + Flow + profile + Current step ----
     row(ERUN, 2060, cy(4.5), 'nw', C.dark, () => t('Temperature'), { weight: 'bold' }),

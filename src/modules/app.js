@@ -24,7 +24,7 @@ const live = { pageState: 'off', family: 'espresso', substate: '', pressure: 0, 
   profileTitle: '', profileType: 'Profile', targetVolume: 0, targetWeight: 0, currentStep: '',
   steamDuration: 30, waterVolume: 50, waterTemp: 90, flushSeconds: 10,
   waterFlowMax: 10, flushFlowMax: 6, steamTarget: 150, steamFlowMax: 2.5, steamPreheat: 160,
-  steamEnabled: true, resistanceOn: false, runElapsed: 0 };
+  steamEnabled: true, resistanceOn: false, runElapsed: 0, scaleConnected: false };
 
 // shared shot data buffer (all charts render from it)
 const buf = { t: [], p: [], pg: [], f: [], fg: [], w: [], T: [], Tg: [], r: [] };
@@ -270,6 +270,7 @@ function showSaver() { api.dimDisplay(); openSaver(wake); }
 const actions = {
   navFlush: () => setFamily('flush'), navEspresso: () => setFamily('espresso'),
   navSteam: () => setFamily('steam'), navWater: () => setFamily('water'),
+  tare: () => { api.tareScale().catch((e) => logger.warn('tare', e)); },
   startEspresso: () => { api.tareScale().catch(() => {}); api.setMachineState('espresso'); },
   startSteam: () => api.setMachineState('steam'),
   startWater: () => { api.tareScale().catch(() => {}); api.setMachineState('hotWater'); },
@@ -372,7 +373,12 @@ async function loadWorkflow() {
     live.profileTitle = wf?.profile?.title || '';
     live.profileType = profileTypeText(steps);
     live.targetTemp = steps?.[0]?.temperature || live.targetTemp;
-    live.targetWeight = wf?.context?.targetYield || wf?.profile?.target_weight || 0;
+    // Prefer the profile's own stop-at-weight (what the profile editor edits) over
+    // context.targetYield, which lingers from the previous shot: loading/creating a
+    // profile updates profile.target_weight but not context, so context would show
+    // a stale value (e.g. 22g) over the profile's real 36g. ?? so a genuine 0
+    // (stop-at-weight off) wins and the card shows "off" rather than a phantom yield.
+    live.targetWeight = wf?.profile?.target_weight ?? wf?.context?.targetYield ?? 0;
     live.targetVolume = wf?.profile?.target_volume || wf?.context?.targetYield || 0;
     preview = buildPreview(steps);
     if (wf?.steamSettings?.duration != null) live.steamDuration = wf.steamSettings.duration;
@@ -527,6 +533,7 @@ function onStateChange(prev, next) {
 }
 
 function onScale(d) {
+  live.scaleConnected = true;   // a snapshot arrived -> a scale (BLE or Bengle integrated) is present
   if (typeof d.weight === 'number') { curWeight = d.weight; live.weight = d.weight; }
   if (typeof d.weightFlow === 'number') curWeightFlow = d.weightFlow;
 }
