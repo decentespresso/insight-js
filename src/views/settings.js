@@ -966,6 +966,38 @@ async function switchSkin(s) {
   } catch (e) { logger.warn('switchSkin', e); toast('Set skin failed'); }
 }
 
+// Reload into freshly-updated skin files after a skin re-pull (api.updateSkins).
+// The pulled files only take effect once the webui server restarts, and decaid
+// rebinds a FRESH PORT on restart — so a plain window.location.reload() reloads the
+// OLD skin on a soon-dead port and the caller's progress label hangs forever (the
+// "update never finishes" bug). Mirror switchSkin()'s working sequence: restart the
+// server, wait for the new port, then navigate to the stable :3000 redirector.
+// On a dev static server (:5173) there's no server to restart, so fall back to a
+// plain reload. `status(msg)` (optional) surfaces progress to the caller's UI, and
+// always ends on a terminal message so no label is left stuck.
+async function reloadIntoUpdatedSkins(status) {
+  const say = (m) => { if (status) status(m); };
+  let st = null;
+  try { st = await api.getWebuiServerStatus(); } catch (e) { /* ignore */ }
+  const port = window.location.port;
+  const inApp = port === '3000' || (st && st.port && String(st.port) === port);
+  if (!inApp) { say(t('Updated — reloading…')); setTimeout(() => window.location.reload(), 1200); return; }
+
+  say(t('Updated — restarting…'));
+  await api.stopWebuiServer().catch(() => {});
+  await api.startWebuiServer().catch(() => {});
+  const newPort = await waitForSkinServer();
+  if (!newPort) { say(t('Updated — restart Decaid to load it')); return; }
+
+  say(t('Updated — reloading…'));
+  // The webview only accepts the navigation once it has picked up the new port; too
+  // early and decaid treats it as an external link. Give it a beat, then one retry.
+  await new Promise((r) => setTimeout(r, 1200));
+  const enter = () => window.location.assign(`${window.location.protocol}//${window.location.hostname}:3000/?_=${Date.now()}`);
+  enter();
+  setTimeout(enter, 3000);
+}
+
 async function skinPanel(body) {
   body.appendChild(spEl('p', 's2-sp-sub', 'Loading skins from reaprime…'));
   const [skins, def] = await Promise.all([api.getSkins().catch(() => []), api.getDefaultSkin().catch(() => ({}))]);
@@ -983,7 +1015,9 @@ async function skinPanel(body) {
   });
   // "Check for current skin updates" — re-pull the installed skins from their GitHub
   // source (POST /webui/skins/update), like Streamline's skin-settings button, then
-  // reload so an updated current skin takes effect without a relaunch.
+  // restart the webui server and navigate to the fresh port so an updated current
+  // skin takes effect without a relaunch. A plain reload lands on the soon-dead old
+  // port and hangs — reloadIntoUpdatedSkins() does the restart+redirect.
   const upd = spEl('button', 's2-sp-btn', t('Check for current skin updates'));
   upd.style.marginTop = '20px';
   upd.addEventListener('click', async () => {
@@ -991,7 +1025,7 @@ async function skinPanel(body) {
     try {
       const res = await api.updateSkins();
       if (res && res.ok === false) throw new Error(`HTTP ${res.status}`);
-      toast(t('Skins updated — reloading…')); setTimeout(() => window.location.reload(), 2000);
+      await reloadIntoUpdatedSkins((m) => { upd.textContent = m; });
     } catch (e) { logger.warn('updateSkins', e); toast(t('Skin update failed')); upd.disabled = false; upd.textContent = was; }
   });
   body.appendChild(upd);
@@ -1632,16 +1666,19 @@ const actions = {
   firmware: () => { machineActionUrl('firmware'); subPanel('Firmware', firmwarePanel); },
   appUpdate: () => {
     // "Update app" re-pulls every installed skin from its GitHub source (POST
-    // /webui/skins/update) — i.e. it also checks for skin updates — then RELOADS so
-    // a freshened skin (including the running one) actually loads, instead of only
-    // taking effect after a relaunch. Progress shows in the button label.
+    // /webui/skins/update) — i.e. it also checks for skin updates — then restarts the
+    // webui server and navigates to the :3000 redirector so a freshened skin (including
+    // the running one) actually loads, instead of only taking effect after a relaunch.
+    // A plain reload would land on decaid's soon-dead old port and leave this label
+    // stuck forever — reloadIntoUpdatedSkins() does the restart+redirect and always
+    // ends on a terminal label. Progress shows in the button label.
     live.appUpdateLabel = t('Checking for updates…'); host.update(live);
     api.updateSkins()
       .then((r) => {
         if (r && r.ok !== false) {
-          live.appUpdateLabel = t('Updated — reloading…'); host.update(live);
-          setTimeout(() => window.location.reload(), 2000);
-        } else { throw new Error(`HTTP ${r && r.status}`); }
+          return reloadIntoUpdatedSkins((m) => { live.appUpdateLabel = m; host.update(live); });
+        }
+        throw new Error(`HTTP ${r && r.status}`);
       })
       .catch(() => {
         live.appUpdateLabel = t('Update failed'); host.update(live);
